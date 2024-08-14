@@ -5,8 +5,6 @@ const acorn = require("acorn");
 const walk = require("acorn-walk");
 const { program } = require("commander");
 const compiler = require("vue-template-compiler");
-const { Parser } = require("json2csv"); // Add this at the top to use json2csv
-
 const nodes = [];
 const edges = [];
 const methodRegistry = new Map(); // To store method definitions by file and name
