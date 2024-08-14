@@ -1,0 +1,15 @@
+{
+  "name": "code-network-gen",
+  "version": "0.0.1",
+  "description": "Explore your JavaScript ecosystem with this network-based code structure analysis tool",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "vue-template-compiler": "^2.7.16"
+  }
+}
