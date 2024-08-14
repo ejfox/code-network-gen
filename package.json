@@ -1,6 +1,6 @@
 {
   "name": "code-network-gen",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Explore your JavaScript ecosystem with this network-based code structure analysis tool",
   "main": "index.js",
   "bin": {
