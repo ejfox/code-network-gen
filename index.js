@@ -11,11 +11,27 @@ const nodes = [];
 const edges = [];
 
 function addNode(id, label, type, lines) {
+  if (type === "unknown") {
+    if (id.includes(":")) {
+      type = "function";
+    } else if (id.includes("/")) {
+      type = "imported-method";
+    } else {
+      type = "variable";
+    }
+  }
   nodes.push({ id, label, type, lines });
 }
-
 function addEdge(source, target, type) {
+  ensureNodeExists(source, source.split(":")[1] || source, "unknown");
+  ensureNodeExists(target, target.split(":")[1] || target, "unknown");
   edges.push({ source, target, type });
+}
+
+function ensureNodeExists(id, label, type) {
+  if (!nodes.some((node) => node.id === id)) {
+    addNode(id, label || id.split(":")[1] || id, type || "unknown");
+  }
 }
 
 function parseFile(filePath) {
@@ -70,6 +86,15 @@ function parseJavaScript(filePath, content) {
       const lines = `[${node.loc.start.line}-${node.loc.end.line}]`;
       addNode(id, node.id.name, "method", lines);
     },
+    VariableDeclarator(node) {
+      const id = `${fileName}:${node.id.name}`;
+      addNode(
+        id,
+        node.id.name,
+        "variable",
+        `[${node.loc.start.line}-${node.loc.end.line}]`
+      );
+    },
     ImportDeclaration(node) {
       const libraryName = node.source.value;
       addNode(libraryName, libraryName, "library", null);
@@ -84,9 +109,36 @@ function parseJavaScript(filePath, content) {
     },
     CallExpression(node) {
       if (node.callee.type === "Identifier") {
-        const callerName = `${fileName}:anonymous[${node.loc.start.line}-${node.loc.end.line}]`;
+        let callerName = `${fileName}:anonymous[${node.loc.start.line}]`;
+        // Try to find the containing function name
+        let parent = node;
+        while ((parent = parent.parent)) {
+          if (parent.type === "FunctionDeclaration" && parent.id) {
+            callerName = `${fileName}:${parent.id.name}`;
+            break;
+          } else if (parent.type === "MethodDefinition" && parent.key) {
+            callerName = `${fileName}:${parent.key.name}`;
+            break;
+          }
+        }
         const calleeName = node.callee.name;
-        addEdge(callerName, calleeName, "calls");
+
+        // Extract argument information
+        const args = node.arguments
+          .map((arg) => {
+            if (arg.type === "Identifier") {
+              return arg.name;
+            } else if (arg.type === "Literal") {
+              return JSON.stringify(arg.value);
+            } else if (arg.type === "MemberExpression") {
+              return `${arg.object.name}.${arg.property.name}`;
+            } else {
+              return arg.type;
+            }
+          })
+          .join(", ");
+
+        addEdge(callerName, calleeName, `calls(${args})`);
       }
     },
     ArrowFunctionExpression(node) {
@@ -176,45 +228,74 @@ function scanDirectory(directory) {
   scan(directory);
 }
 
-function deduplicate(array, keyFn) {
-  const seen = new Map();
-  return array.filter((item) => {
-    const key = keyFn(item);
-    if (seen.has(key)) {
-      const existing = seen.get(key);
-      // Merge line numbers if they exist
-      if (item.lines && existing.lines) {
-        existing.lines += `, ${item.lines}`;
-      }
-      return false;
+function deduplicate(nodes, edges) {
+  const uniqueNodes = new Map();
+  const uniqueEdges = new Map();
+  const referencedNodes = new Set();
+
+  // Deduplicate nodes
+  nodes.forEach((node) => {
+    const key = `${node.id}-${node.type}`;
+    if (!uniqueNodes.has(key)) {
+      uniqueNodes.set(key, node);
     } else {
-      seen.set(key, item);
-      return true;
+      const existingNode = uniqueNodes.get(key);
+      if (node.lines && existingNode.lines) {
+        existingNode.lines += `, ${node.lines}`;
+      }
     }
   });
-}
 
-function displayResults() {
-  const uniqueNodes = deduplicate(nodes, (node) => `${node.id}-${node.type}`);
-  const uniqueEdges = deduplicate(
-    edges,
-    (edge) => `${edge.source}-${edge.target}-${edge.type}`
+  // Deduplicate edges and track referenced nodes
+  edges.forEach((edge) => {
+    const key = `${edge.source}-${edge.target}-${edge.type}`;
+    if (!uniqueEdges.has(key)) {
+      uniqueEdges.set(key, edge);
+      referencedNodes.add(edge.source);
+      referencedNodes.add(edge.target);
+    }
+  });
+
+  // Filter nodes to only include those that are referenced
+  const filteredNodes = Array.from(uniqueNodes.values()).filter((node) =>
+    referencedNodes.has(node.id)
   );
 
+  return {
+    nodes: filteredNodes,
+    edges: Array.from(uniqueEdges.values()),
+  };
+}
+
+function displayResults(filterAnonymous = true) {
+  const { nodes: uniqueNodes, edges: uniqueEdges } = deduplicate(nodes, edges);
+
+  const filteredNodes = filterAnonymous
+    ? uniqueNodes.filter(
+        (node) => node.label && !node.label.includes("anonymous")
+      )
+    : uniqueNodes;
+
+  const filteredEdges = filterAnonymous
+    ? uniqueEdges.filter(
+        (edge) => edge.label && !edge.label.includes("anonymous")
+      )
+    : uniqueEdges;
+
   console.log("Nodes:");
-  uniqueNodes.forEach((node) => {
-    console.log(
-      `${node.id} ${node.lines || ""} - ${node.label} (${node.type})`
-    );
+  filteredNodes.forEach((node) => {
+    const label = node.label || "";
+    console.log(`${node.id} - ${label} (${node.type})`);
   });
 
   console.log("\nEdges:");
-  uniqueEdges.forEach((edge) => {
-    console.log(`${edge.source} -> ${edge.target} (${edge.type})`);
+  filteredEdges.forEach((edge) => {
+    const label = edge.label || "";
+    console.log(`${edge.source} -> ${edge.target} (${label})`);
   });
 
-  console.log(`\nTotal unique nodes: ${uniqueNodes.length}`);
-  console.log(`Total unique edges: ${uniqueEdges.length}`);
+  console.log(`\nTotal unique nodes: ${filteredNodes.length}`);
+  console.log(`Total unique edges: ${filteredEdges.length}`);
 }
 
 program
@@ -234,7 +315,7 @@ console.log(`Analyzing directory: ${options.path}`);
 
 try {
   scanDirectory(options.path);
-  displayResults();
+  displayResults(false);
 } catch (error) {
   console.error(`Error during analysis: ${error.message}`);
   console.log("Partial results:");
