@@ -4,61 +4,66 @@ const path = require("path");
 const acorn = require("acorn");
 const walk = require("acorn-walk");
 const { program } = require("commander");
-
 const compiler = require("vue-template-compiler");
+const { Parser } = require("json2csv"); // Add this at the top to use json2csv
 
 const nodes = [];
 const edges = [];
+const methodRegistry = new Map(); // To store method definitions by file and name
 
-function addNode(id, label, type, lines) {
-  if (type === "unknown") {
-    if (id.includes(":")) {
-      type = "function";
-    } else if (id.includes("/")) {
-      type = "imported-method";
-    } else {
-      type = "variable";
-    }
+// Function to add a node (method/function) to the registry and nodes list
+function addNode(file, name, type, lines) {
+  const id = `${file}:${name}`;
+  if (!methodRegistry.has(id)) {
+    methodRegistry.set(id, { file, name, type, lines });
   }
-  nodes.push({ id, label, type, lines });
-}
-function addEdge(source, target, type) {
-  ensureNodeExists(source, source.split(":")[1] || source, "unknown");
-  ensureNodeExists(target, target.split(":")[1] || target, "unknown");
-  edges.push({ source, target, type });
+  nodes.push({ id, label: name, type, lines });
 }
 
-function ensureNodeExists(id, label, type) {
-  if (!nodes.some((node) => node.id === id)) {
-    addNode(id, label || id.split(":")[1] || id, type || "unknown");
+// Function to add an edge between methods/functions
+function addEdge(sourceFile, sourceMethod, targetFile, targetMethod, type) {
+  const sourceId = `${sourceFile}:${sourceMethod}`;
+  const targetId = `${targetFile}:${targetMethod}`;
+
+  if (methodRegistry.has(targetId)) {
+    edges.push({ source: sourceId, target: targetId, type });
   }
 }
 
+// Function to parse a single file and extract method/function definitions and calls
 function parseFile(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const content = fs.readFileSync(filePath, "utf8");
 
-  console.log(`Parsing file: ${filePath}, extension: ${ext}`);
+  // console.log(`Parsing file: ${filePath}, extension: ${ext}`);
 
   if (ext === ".vue") {
     const parsed = compiler.parseComponent(content);
     if (parsed.script) {
-      console.log(`Vue file detected, parsing script content`);
       parseJavaScript(filePath, parsed.script.content);
     } else if (content.includes("<script setup>")) {
-      console.log(`Vue file detected with <script setup>, parsing content`);
       const scriptContent = content
         .split("<script setup>")[1]
         .split("</script>")[0];
       parseJavaScript(filePath, scriptContent);
-    } else {
-      console.log(`Vue file has no script content`);
     }
   } else {
     parseJavaScript(filePath, content);
   }
 }
 
+// Function to get the name of the enclosing function
+function getEnclosingFunctionName(node) {
+  let parent = node;
+  while ((parent = parent.parent)) {
+    if (parent.type === "FunctionDeclaration" && parent.id) {
+      return parent.id.name;
+    }
+  }
+  return "global";
+}
+
+// Function to parse JavaScript content and identify methods/functions and their interactions
 function parseJavaScript(filePath, content) {
   let ast;
   try {
@@ -82,79 +87,37 @@ function parseJavaScript(filePath, content) {
 
   walk.simple(ast, {
     FunctionDeclaration(node) {
-      const id = `${fileName}:${node.id.name}`;
+      const name = node.id.name;
       const lines = `[${node.loc.start.line}-${node.loc.end.line}]`;
-      addNode(id, node.id.name, "method", lines);
-    },
-    VariableDeclarator(node) {
-      const id = `${fileName}:${node.id.name}`;
-      addNode(
-        id,
-        node.id.name,
-        "variable",
-        `[${node.loc.start.line}-${node.loc.end.line}]`
-      );
-    },
-    ImportDeclaration(node) {
-      const libraryName = node.source.value;
-      addNode(libraryName, libraryName, "library", null);
-
-      node.specifiers.forEach((specifier) => {
-        if (specifier.type === "ImportSpecifier") {
-          const methodName = `${libraryName}/${specifier.imported.name}`;
-          addNode(methodName, specifier.imported.name, "imported-method", null);
-          addEdge(fileName, methodName, "imports");
-        }
-      });
+      addNode(fileName, name, "function", lines);
     },
     CallExpression(node) {
       if (node.callee.type === "Identifier") {
-        let callerName = `${fileName}:anonymous[${node.loc.start.line}]`;
-        // Try to find the containing function name
-        let parent = node;
-        while ((parent = parent.parent)) {
-          if (parent.type === "FunctionDeclaration" && parent.id) {
-            callerName = `${fileName}:${parent.id.name}`;
-            break;
-          } else if (parent.type === "MethodDefinition" && parent.key) {
-            callerName = `${fileName}:${parent.key.name}`;
-            break;
-          }
-        }
         const calleeName = node.callee.name;
+        const parentFunction = getEnclosingFunctionName(node);
 
-        // Extract argument information
-        const args = node.arguments
-          .map((arg) => {
-            if (arg.type === "Identifier") {
-              return arg.name;
-            } else if (arg.type === "Literal") {
-              return JSON.stringify(arg.value);
-            } else if (arg.type === "MemberExpression") {
-              return `${arg.object.name}.${arg.property.name}`;
-            } else {
-              return arg.type;
-            }
-          })
-          .join(", ");
-
-        addEdge(callerName, calleeName, `calls(${args})`);
+        // Track the method call, regardless of whether it's within the same file or across files
+        methodRegistry.forEach((info, id) => {
+          if (info.name === calleeName) {
+            addEdge(fileName, parentFunction, info.file, calleeName, "calls");
+          }
+        });
       }
     },
     ArrowFunctionExpression(node) {
       const id = `${fileName}:arrow`;
       const lines = `[${node.loc.start.line}-${node.loc.end.line}]`;
-      addNode(id, "arrow function", "method", lines);
+      addNode(fileName, "arrow function", "method", lines);
     },
     ClassDeclaration(node) {
       const id = `${fileName}:${node.id.name}`;
       const lines = `[${node.loc.start.line}-${node.loc.end.line}]`;
-      addNode(id, node.id.name, "class", lines);
+      addNode(fileName, node.id.name, "class", lines);
     },
     MethodDefinition(node) {
       const id = `${fileName}:${node.key.name}`;
       const lines = `[${node.loc.start.line}-${node.loc.end.line}]`;
-      addNode(id, node.key.name, "method", lines);
+      addNode(fileName, node.key.name, "method", lines);
     },
     VariableDeclarator(node) {
       if (
@@ -164,7 +127,7 @@ function parseJavaScript(filePath, content) {
       ) {
         const id = `${fileName}:${node.id.name}`;
         const lines = `[${node.loc.start.line}-${node.loc.end.line}]`;
-        addNode(id, node.id.name, "method", lines);
+        addNode(fileName, node.id.name, "method", lines);
       }
     },
     ExportDefaultDeclaration(node) {
@@ -177,7 +140,7 @@ function parseJavaScript(filePath, content) {
           ) {
             const id = `${fileName}:${prop.key.name}`;
             const lines = `[${prop.loc.start.line}-${prop.loc.end.line}]`;
-            addNode(id, prop.key.name, "vue-method", lines);
+            addNode(fileName, prop.key.name, "vue-method", lines);
           }
         });
       }
@@ -189,11 +152,13 @@ function parseJavaScript(filePath, content) {
       ) {
         const id = `${fileName}:${node.key.name}`;
         const lines = `[${node.loc.start.line}-${node.loc.end.line}]`;
-        addNode(id, node.key.name, "vue-method", lines);
+        addNode(fileName, node.key.name, "vue-method", lines);
       }
     },
   });
 }
+
+// Function to scan a directory for files to process
 function scanDirectory(directory) {
   const ignoreDirs = ["node_modules", ".git", "build", "dist"];
   const allowedExtensions = [".js", ".jsx", ".ts", ".tsx", ".vue"];
@@ -212,7 +177,7 @@ function scanDirectory(directory) {
       } else if (stat.isFile()) {
         const ext = path.extname(file).toLowerCase();
         if (allowedExtensions.includes(ext)) {
-          console.log(`Processing file: ${filePath}`); // Add this line
+          // console.log(`Processing file: ${filePath}`);
           try {
             parseFile(filePath);
           } catch (error) {
@@ -228,6 +193,7 @@ function scanDirectory(directory) {
   scan(directory);
 }
 
+// Function to deduplicate nodes and edges
 function deduplicate(nodes, edges) {
   const uniqueNodes = new Map();
   const uniqueEdges = new Map();
@@ -267,6 +233,7 @@ function deduplicate(nodes, edges) {
   };
 }
 
+// Function to display the results, including all method interactions
 function displayResults(filterAnonymous = true) {
   const { nodes: uniqueNodes, edges: uniqueEdges } = deduplicate(nodes, edges);
 
@@ -290,8 +257,7 @@ function displayResults(filterAnonymous = true) {
 
   console.log("\nEdges:");
   filteredEdges.forEach((edge) => {
-    const label = edge.label || "";
-    console.log(`${edge.source} -> ${edge.target} (${label})`);
+    console.log(`${edge.source} -> ${edge.target} (${edge.type})`);
   });
 
   console.log(`\nTotal unique nodes: ${filteredNodes.length}`);
@@ -302,6 +268,7 @@ program
   .version("0.1.0")
   .description("A CLI tool for analyzing JavaScript code structure")
   .option("-p, --path <directory>", "Path to the directory to analyze")
+  .option("-o, --output <file>", "Output filename for the analysis results")
   .parse(process.argv);
 
 const options = program.opts();
@@ -316,6 +283,43 @@ console.log(`Analyzing directory: ${options.path}`);
 try {
   scanDirectory(options.path);
   displayResults(false);
+
+  if (options.output) {
+    const { nodes: uniqueNodes, edges: uniqueEdges } = deduplicate(
+      nodes,
+      edges
+    );
+
+    // No filtering for debugging purposes
+    // const filteredNodes = uniqueNodes.filter(
+    //   (node) => node.label && !node.label.includes("anonymous")
+    // );
+    // const filteredEdges = uniqueEdges.filter(
+    //   (edge) => edge.label && !edge.label.includes("anonymous")
+    // );
+
+    // Manually create CSV content for nodes
+    const nodeFields = ["id", "label", "type", "lines"];
+    const nodesCsv = [nodeFields.join(",")];
+    uniqueNodes.forEach((node) => {
+      nodesCsv.push([node.id, node.label, node.type, node.lines].join(","));
+    });
+
+    // Manually create CSV content for edges
+    const edgeFields = ["source", "target", "type"];
+    const edgesCsv = [edgeFields.join(",")];
+    uniqueEdges.forEach((edge) => {
+      edgesCsv.push([edge.source, edge.target, edge.type].join(","));
+    });
+
+    // Write the CSV files
+    fs.writeFileSync(`${options.output}_nodes.csv`, nodesCsv.join("\n"));
+    fs.writeFileSync(`${options.output}_edges.csv`, edgesCsv.join("\n"));
+
+    console.log(
+      `Results saved to ${options.output}_nodes.csv and ${options.output}_edges.csv`
+    );
+  }
 } catch (error) {
   console.error(`Error during analysis: ${error.message}`);
   console.log("Partial results:");
