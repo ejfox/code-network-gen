@@ -53,6 +53,9 @@
     "url": "https://github.com/ejfox/code-network-gen/issues"
   },
   "dependencies": {
+    "@babel/parser": "^7.28.0",
+    "@babel/traverse": "^7.28.0",
+    "@typescript-eslint/parser": "^8.38.0",
     "acorn": "^8.12.1",
     "acorn-walk": "^8.3.3",
     "commander": "^12.1.0",

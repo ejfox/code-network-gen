@@ -6,6 +6,8 @@ const walk = require('acorn-walk');
 const { program } = require('commander');
 const compiler = require('vue-template-compiler');
 const { parse } = require('json2csv');
+const { parse: babelParse } = require('@babel/parser');
+const traverse = require('@babel/traverse').default;
 const nodes = [];
 const edges = [];
 const methodRegistry = new Map(); // To store method definitions by file and name
@@ -132,26 +134,106 @@ const getEnclosingFunctionName = (node) => {
 // Function to parse JavaScript content and identify methods/functions and their interactions
 const parseJavaScript = (filePath, content) => {
   let ast;
+  const ext = path.extname(filePath).toLowerCase();
+  const isTypeScript = ext === '.ts' || ext === '.tsx';
+  
   try {
-    ast = acorn.parse(content, {
-      ecmaVersion: 'latest',
+    // Use Babel parser for TypeScript and modern JS features
+    ast = babelParse(content, {
       sourceType: 'module',
-      locations: true,
-      allowHashBang: true,
-      allowReserved: true,
-      allowReturnOutsideFunction: true,
       allowImportExportEverywhere: true,
+      allowAwaitOutsideFunction: true,
+      allowReturnOutsideFunction: true,
+      allowSuperOutsideMethod: true,
+      allowUndeclaredExports: true,
+      plugins: [
+        'jsx',
+        'decorators-legacy',
+        'classProperties',
+        'objectRestSpread',
+        'functionBind',
+        'exportDefaultFrom',
+        'exportNamespaceFrom',
+        'dynamicImport',
+        'nullishCoalescingOperator',
+        'optionalChaining',
+        ...(isTypeScript ? ['typescript'] : [])
+      ],
     });
   } catch (error) {
-    console.warn(
-      `Warning: Could not parse ${filePath}. Error: ${error.message}`,
-    );
-    return;
+    // Fallback to acorn for simple JS files
+    try {
+      ast = acorn.parse(content, {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        locations: true,
+        allowHashBang: true,
+        allowReserved: true,
+        allowReturnOutsideFunction: true,
+        allowImportExportEverywhere: true,
+      });
+    } catch (fallbackError) {
+      console.warn(
+        `Warning: Could not parse ${filePath}. Error: ${fallbackError.message}`,
+      );
+      return;
+    }
   }
 
   const fileName = path.basename(filePath);
+  const isBabelAST = ast.type === 'File'; // Babel ASTs have a File node at the root
 
-  walk.simple(ast, {
+  // Helper functions for handling different node types
+  const handleFunctionNode = (node, type, name = null) => {
+    const nodeName = name || (node.id ? node.id.name : 'anonymous');
+    if (node.loc) {
+      const { start, end } = node.loc;
+      const lines = `[${start.line}-${end.line}]`;
+      addNode(fileName, nodeName, type, lines);
+    }
+  };
+
+  const handleCallNode = (node) => {
+    if (node.callee && node.callee.type === 'Identifier') {
+      const calleeName = node.callee.name;
+      const parentFunction = getEnclosingFunctionName(node);
+
+      methodRegistry.forEach((info, id) => {
+        if (info.name === calleeName) {
+          addEdge(fileName, parentFunction, info.file, calleeName, 'calls');
+        }
+      });
+    }
+  };
+
+  // Use appropriate traversal method based on AST type
+  if (isBabelAST) {
+    // Use Babel traverse for Babel ASTs
+    traverse(ast, {
+      FunctionDeclaration(path) {
+        handleFunctionNode(path.node, 'function');
+      },
+      FunctionExpression(path) {
+        handleFunctionNode(path.node, 'function');
+      },
+      ArrowFunctionExpression(path) {
+        handleFunctionNode(path.node, 'function');
+      },
+      ClassMethod(path) {
+        const methodName = path.node.key?.name || 'method';
+        handleFunctionNode(path.node, 'method', methodName);
+      },
+      ObjectMethod(path) {
+        const methodName = path.node.key?.name || 'method';
+        handleFunctionNode(path.node, 'method', methodName);
+      },
+      CallExpression(path) {
+        handleCallNode(path.node);
+      }
+    });
+  } else {
+    // Use acorn-walk for acorn ASTs
+    walk.simple(ast, {
     FunctionDeclaration(node) {
       const { name } = node.id;
       const { start, end } = node.loc;
@@ -237,7 +319,8 @@ const parseJavaScript = (filePath, content) => {
         addNode(fileName, name, 'vue-method', lines);
       }
     },
-  });
+    });
+  }
 };
 
 // Function to scan a directory for files to process
