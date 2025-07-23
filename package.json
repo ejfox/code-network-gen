@@ -8,15 +8,59 @@
   },
   "scripts": {
     "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test.js",
+    "meta": "node index.js --path . -o meta_analysis && echo 'Meta-analysis results saved to meta_analysis_nodes.csv and meta_analysis_edges.csv'",
+    "lint": "eslint *.js",
+    "lint:fix": "eslint *.js --fix",
+    "format": "prettier --write *.js",
+    "format:check": "prettier --check *.js",
+    "analyze": "node index.js --path . -o analysis",
+    "dev": "node index.js"
   },
-  "author": "",
+  "keywords": [
+    "javascript",
+    "vue",
+    "code-analysis",
+    "network-analysis",
+    "static-analysis",
+    "dependency-graph",
+    "function-calls",
+    "ast",
+    "code-visualization",
+    "software-architecture",
+    "csv-export",
+    "gexf-export",
+    "graphml-export",
+    "dot-export",
+    "mermaid-export",
+    "method-mapping",
+    "yed",
+    "cytoscape",
+    "graphviz",
+    "mermaid",
+    "flowchart",
+    "github-markdown",
+    "documentation"
+  ],
+  "author": "ejfox",
   "license": "ISC",
+  "homepage": "https://github.com/ejfox/code-network-gen#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ejfox/code-network-gen.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ejfox/code-network-gen/issues"
+  },
   "dependencies": {
     "acorn": "^8.12.1",
     "acorn-walk": "^8.3.3",
     "commander": "^12.1.0",
     "json2csv": "^6.0.0-alpha.2",
     "vue-template-compiler": "^2.7.16"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0"
   }
 }
