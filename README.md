@@ -12,6 +12,38 @@ npx code-network-gen --path . -o my_code_network
 
 that's it. creates `my_code_network_nodes.csv` and `my_code_network_edges.csv` in seconds.
 
+## example output
+
+here's what the tool finds when analyzing a simple CLI app with 12 functions across 4 files:
+
+**nodes.csv** (functions and methods):
+```csv
+"id","label","type","lines"
+"data.js:loadBookmarks","loadBookmarks","function","[14-31]"
+"data.js:formatTableData","formatTableData","function","[37-54]"
+"data.js:reloadBookmarks","reloadBookmarks","function","[56-62]"
+"data.js:searchBookmarks","searchBookmarks","function","[64-84]"
+"index.mjs:showLoadingScreen","showLoadingScreen","function","[13-85]"
+"index.mjs:main","main","function","[88-156]"
+"ui.js:viewSummary","viewSummary","function","[21-65]"
+"ui.js:updateSummary","updateSummary","function","[67-90]"
+```
+
+**edges.csv** (function call relationships):
+```csv
+"source","target","type"
+"data.js:global","data.js:loadBookmarks","calls"
+"index.mjs:global","index.mjs:showLoadingScreen","calls"
+"index.mjs:global","data.js:loadBookmarks","calls"
+"index.mjs:global","index.mjs:main","calls"
+"ui.js:global","ui.js:viewSummary","calls"
+"ui.js:global","data.js:formatTableData","calls"
+"ui.js:global","ui.js:updateDisplay","calls"
+"ui.js:global","data.js:reloadBookmarks","calls"
+```
+
+shows clear separation between data handling (`data.js`), user interface (`ui.js`), and application entry point (`index.mjs`). perfect for understanding code architecture at a glance.
+
 ## usage
 
 ```bash
