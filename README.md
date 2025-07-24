@@ -105,6 +105,7 @@ npx code-network-gen --path <directory> [-o output_name] [-f format]
 - `--path` - directory to analyze (required)
 - `-o` - output file prefix (optional, outputs to console if omitted)
 - `-f, --format` - output format: `csv` (default), `gexf` (for Gephi), `graphml` (for yEd, Cytoscape), `dot` (for Graphviz), or `mermaid` (for GitHub, Notion, etc.)
+- `--include-deps` - include package.json dependencies in network analysis
 
 ### examples
 
@@ -147,6 +148,13 @@ analyze with mermaid output for documentation:
 ```bash
 npx code-network-gen --path ./src -o my_project --format mermaid
 # creates: my_project.mmd (ready to paste into GitHub, Notion, Obsidian, etc.)
+```
+
+include package.json dependencies in analysis:
+
+```bash
+npx code-network-gen --path . --include-deps -o my_project
+# adds all dependencies and devDependencies as orange nodes
 ```
 
 ## what it finds

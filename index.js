@@ -12,6 +12,36 @@ const nodes = [];
 const edges = [];
 const methodRegistry = new Map(); // To store method definitions by file and name
 
+// Function to add package.json dependencies to the network
+function addPackageDependencies(directoryPath) {
+  const packagePath = path.join(directoryPath, 'package.json');
+  if (!fs.existsSync(packagePath)) return;
+  
+  try {
+    const packageContent = fs.readFileSync(packagePath, 'utf8');
+    const packageData = JSON.parse(packageContent);
+    
+    const deps = {
+      ...packageData.dependencies || {},
+      ...packageData.devDependencies || {}
+    };
+    
+    // Add dependency nodes
+    Object.keys(deps).forEach(depName => {
+      addNode('package.json', depName, 'dependency', '[-]');
+    });
+    
+    // Add edges from global scope to dependencies (simulating imports)
+    Object.keys(deps).forEach(depName => {
+      addEdge('package.json', 'global', 'package.json', depName, 'requires');
+    });
+    
+    console.log(`Added ${Object.keys(deps).length} dependencies from package.json`);
+  } catch (error) {
+    console.warn(`Could not parse package.json: ${error.message}`);
+  }
+}
+
 
 function addNode(file, name, type, lines) {
   const id = `${file}:${name}`;
@@ -511,6 +541,7 @@ function generateMermaid(nodes, edges) {
   mermaid += `    classDef classClass fill:#fff3e0,stroke:#e65100,stroke-width:2px\n`;
   mermaid += `    classDef vueMethodClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px\n`;
   mermaid += `    classDef globalClass fill:#ffebee,stroke:#c62828,stroke-width:2px\n`;
+  mermaid += `    classDef dependencyClass fill:#fff8e1,stroke:#ff8f00,stroke-width:2px\n`;
 
   // Apply classes to nodes
   const nodesByType = {
@@ -518,7 +549,8 @@ function generateMermaid(nodes, edges) {
     method: [],
     class: [],
     'vue-method': [],
-    global: []
+    global: [],
+    dependency: []
   };
 
   filteredNodes.forEach((node) => {
@@ -543,6 +575,9 @@ function generateMermaid(nodes, edges) {
   }
   if (nodesByType.global.length > 0) {
     mermaid += `    class ${nodesByType.global.join(',')} globalClass\n`;
+  }
+  if (nodesByType.dependency.length > 0) {
+    mermaid += `    class ${nodesByType.dependency.join(',')} dependencyClass\n`;
   }
 
   return mermaid;
@@ -652,11 +687,12 @@ function filterForMermaid(nodes, edges) {
 }
 
 program
-  .version('0.0.2')
+  .version('0.0.3')
   .description('A CLI tool for analyzing JavaScript code structure')
   .option('-p, --path <directory>', 'Path to the directory to analyze')
   .option('-o, --output <file>', 'Output filename for the analysis results')
   .option('-f, --format <format>', 'Output format: csv (default), gexf, graphml, dot, or mermaid', 'csv')
+  .option('--include-deps', 'Include package.json dependencies in the network analysis')
   .parse(process.argv);
 
 const options = program.opts();
@@ -686,6 +722,11 @@ console.log(`Analyzing directory: ${inputPath}`);
 
 try {
   const scanResults = scanDirectory(inputPath);
+  
+  // Add package.json dependencies if requested
+  if (options.includeDeps) {
+    addPackageDependencies(inputPath);
+  }
 
   if (nodes.length === 0) {
     console.log('\nNo nodes found. Analysis complete.');
