@@ -105,7 +105,7 @@ npx code-network-gen --path <directory> [-o output_name] [-f format]
 - `--path` - directory to analyze (required)
 - `-o` - output file prefix (optional, outputs to console if omitted)
 - `-f, --format` - output format: `csv` (default), `gexf` (for Gephi), `graphml` (for yEd, Cytoscape), `dot` (for Graphviz), or `mermaid` (for GitHub, Notion, etc.)
-- `--include-deps` - include package.json dependencies in network analysis
+- `--include-deps` - parse import/require statements to track actual dependency usage
 
 ### examples
 
@@ -154,7 +154,8 @@ include package.json dependencies in analysis:
 
 ```bash
 npx code-network-gen --path . --include-deps -o my_project
-# adds all dependencies and devDependencies as orange nodes
+# tracks actual import/require statements to show real dependency usage
+# creates edges like: data.js:global -> package.json:axios (imports)
 ```
 
 ## what it finds
