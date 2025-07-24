@@ -12,479 +12,103 @@ const nodes = [];
 const edges = [];
 const methodRegistry = new Map(); // To store method definitions by file and name
 
-// Enhanced error handling utilities
-function createError(message, code, details = {}) {
-  const error = new Error(message);
-  error.code = code;
-  error.details = details;
-  return error;
-}
 
-function validatePath(targetPath, type = 'directory') {
-  try {
-    const stats = fs.statSync(targetPath);
-    if (type === 'directory' && !stats.isDirectory()) {
-      throw createError(`Path '${targetPath}' exists but is not a directory`, 'INVALID_DIRECTORY', { path: targetPath });
-    }
-    if (type === 'file' && !stats.isFile()) {
-      throw createError(`Path '${targetPath}' exists but is not a file`, 'INVALID_FILE', { path: targetPath });
-    }
-    return true;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      throw createError(`Path '${targetPath}' does not exist`, 'PATH_NOT_FOUND', { path: targetPath });
-    }
-    if (error.code === 'EACCES') {
-      throw createError(`Permission denied accessing '${targetPath}'`, 'ACCESS_DENIED', { path: targetPath });
-    }
-    if (error.code && error.code.startsWith('INVALID_') || error.code === 'PATH_NOT_FOUND') {
-      throw error; // Re-throw our custom errors
-    }
-    throw createError(`Error accessing path '${targetPath}': ${error.message}`, 'PATH_ACCESS_ERROR', { path: targetPath, originalError: error.message });
-  }
-}
-
-function validateOutputPath(outputPath) {
-  try {
-    const dir = path.dirname(outputPath);
-
-    // Check if directory exists and is writable
-    try {
-      fs.accessSync(dir, fs.constants.F_OK | fs.constants.W_OK);
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        throw createError(`Output directory '${dir}' does not exist`, 'OUTPUT_DIR_NOT_FOUND', { path: dir });
-      }
-      if (error.code === 'EACCES') {
-        throw createError(`No write permission for output directory '${dir}'`, 'OUTPUT_DIR_NO_WRITE', { path: dir });
-      }
-      throw createError(`Cannot write to output directory '${dir}': ${error.message}`, 'OUTPUT_DIR_ERROR', { path: dir, originalError: error.message });
-    }
-
-    // Test write access by creating a temporary file
-    const testFile = path.join(dir, `.test-write-${Date.now()}.tmp`);
-    try {
-      fs.writeFileSync(testFile, 'test');
-      fs.unlinkSync(testFile);
-    } catch (error) {
-      throw createError(`Cannot write to output path '${outputPath}': ${error.message}`, 'OUTPUT_WRITE_TEST_FAILED', { path: outputPath, originalError: error.message });
-    }
-
-    return true;
-  } catch (error) {
-    if (error.code && error.code.startsWith('OUTPUT_')) {
-      throw error; // Re-throw our custom errors
-    }
-    throw createError(`Error validating output path '${outputPath}': ${error.message}`, 'OUTPUT_VALIDATION_ERROR', { path: outputPath, originalError: error.message });
-  }
-}
-
-// Function to add a node (method/function) to the registry and nodes list
 function addNode(file, name, type, lines) {
   const id = `${file}:${name}`;
-  if (!methodRegistry.has(id)) {
-    methodRegistry.set(id, { file, name, type, lines });
-  }
+  methodRegistry.set(id, { file, name, type, lines });
   nodes.push({ id, label: name, type, lines });
 }
 
-// Function to add an edge between methods/functions
 function addEdge(sourceFile, sourceMethod, targetFile, targetMethod, type) {
   const sourceId = `${sourceFile}:${sourceMethod}`;
   const targetId = `${targetFile}:${targetMethod}`;
-
   if (methodRegistry.has(targetId)) {
     edges.push({ source: sourceId, target: targetId, type });
   }
 }
 
-// Function to parse a single file and extract method/function definitions and calls
 const parseFile = (filePath) => {
-  const ext = path.extname(filePath).toLowerCase();
   const content = fs.readFileSync(filePath, 'utf8');
-
-  // console.log(`Parsing file: ${filePath}, extension: ${ext}`);
-
+  const ext = path.extname(filePath).toLowerCase();
+  
   if (ext === '.vue') {
     const parsed = compiler.parseComponent(content);
-    if (parsed.script) {
-      parseJavaScript(filePath, parsed.script.content);
-    } else if (content.includes('<script setup>')) {
-      const scriptContent = content
-        .split('<script setup>')[1]
-        .split('</script>')[0];
-      parseJavaScript(filePath, scriptContent);
-    }
+    if (parsed.script) parseJavaScript(filePath, parsed.script.content);
   } else {
     parseJavaScript(filePath, content);
   }
 };
 
-// Function to get the name of the enclosing function
 const getEnclosingFunctionName = (node) => {
   let parent = node;
   while ((parent = parent.parent)) {
-    if (parent.type === 'FunctionDeclaration' && parent.id) {
-      return parent.id.name;
-    }
+    if (parent.type === 'FunctionDeclaration' && parent.id) return parent.id.name;
   }
   return 'global';
 };
 
-// Function to parse JavaScript content and identify methods/functions and their interactions
 const parseJavaScript = (filePath, content) => {
-  let ast;
-  const ext = path.extname(filePath).toLowerCase();
-  const isTypeScript = ext === '.ts' || ext === '.tsx';
-  
   try {
-    // Use Babel parser for TypeScript and modern JS features
-    ast = babelParse(content, {
-      sourceType: 'module',
-      allowImportExportEverywhere: true,
-      allowAwaitOutsideFunction: true,
-      allowReturnOutsideFunction: true,
-      allowSuperOutsideMethod: true,
-      allowUndeclaredExports: true,
-      plugins: [
-        'jsx',
-        'decorators-legacy',
-        'classProperties',
-        'objectRestSpread',
-        'functionBind',
-        'exportDefaultFrom',
-        'exportNamespaceFrom',
-        'dynamicImport',
-        'nullishCoalescingOperator',
-        'optionalChaining',
-        ...(isTypeScript ? ['typescript'] : [])
-      ],
+    const ast = acorn.parse(content, { ecmaVersion: 'latest', sourceType: 'module', locations: true });
+    const fileName = path.basename(filePath);
+    
+    walk.simple(ast, {
+      FunctionDeclaration(node) {
+        if (node.id?.name) {
+          const lines = `[${node.loc.start.line}-${node.loc.end.line}]`;
+          addNode(fileName, node.id.name, 'function', lines);
+        }
+      },
+      CallExpression(node) {
+        if (node.callee?.type === 'Identifier') {
+          const calleeName = node.callee.name;
+          const parentFunction = getEnclosingFunctionName(node);
+          methodRegistry.forEach((info) => {
+            if (info.name === calleeName) {
+              addEdge(fileName, parentFunction, info.file, calleeName, 'calls');
+            }
+          });
+        }
+      }
     });
   } catch (error) {
-    // Fallback to acorn for simple JS files
-    try {
-      ast = acorn.parse(content, {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-        locations: true,
-        allowHashBang: true,
-        allowReserved: true,
-        allowReturnOutsideFunction: true,
-        allowImportExportEverywhere: true,
-      });
-    } catch (fallbackError) {
-      console.warn(
-        `Warning: Could not parse ${filePath}. Error: ${fallbackError.message}`,
-      );
-      return;
-    }
-  }
-
-  const fileName = path.basename(filePath);
-  const isBabelAST = ast.type === 'File'; // Babel ASTs have a File node at the root
-
-  // Helper functions for handling different node types
-  const handleFunctionNode = (node, type, name = null) => {
-    const nodeName = name || (node.id ? node.id.name : 'anonymous');
-    if (node.loc) {
-      const { start, end } = node.loc;
-      const lines = `[${start.line}-${end.line}]`;
-      addNode(fileName, nodeName, type, lines);
-    }
-  };
-
-  const handleCallNode = (node) => {
-    if (node.callee && node.callee.type === 'Identifier') {
-      const calleeName = node.callee.name;
-      const parentFunction = getEnclosingFunctionName(node);
-
-      methodRegistry.forEach((info, id) => {
-        if (info.name === calleeName) {
-          addEdge(fileName, parentFunction, info.file, calleeName, 'calls');
-        }
-      });
-    }
-  };
-
-  // Use appropriate traversal method based on AST type
-  if (isBabelAST) {
-    // Use Babel traverse for Babel ASTs
-    traverse(ast, {
-      FunctionDeclaration(path) {
-        handleFunctionNode(path.node, 'function');
-      },
-      FunctionExpression(path) {
-        handleFunctionNode(path.node, 'function');
-      },
-      ArrowFunctionExpression(path) {
-        handleFunctionNode(path.node, 'function');
-      },
-      ClassMethod(path) {
-        const methodName = path.node.key?.name || 'method';
-        handleFunctionNode(path.node, 'method', methodName);
-      },
-      ObjectMethod(path) {
-        const methodName = path.node.key?.name || 'method';
-        handleFunctionNode(path.node, 'method', methodName);
-      },
-      CallExpression(path) {
-        handleCallNode(path.node);
-      }
-    });
-  } else {
-    // Use acorn-walk for acorn ASTs
-    walk.simple(ast, {
-    FunctionDeclaration(node) {
-      const { name } = node.id;
-      const { start, end } = node.loc;
-      const lines = `[${start.line}-${end.line}]`;
-      addNode(fileName, name, 'function', lines);
-    },
-    CallExpression(node) {
-      if (node.callee.type === 'Identifier') {
-        const calleeName = node.callee.name;
-        const parentFunction = getEnclosingFunctionName(node);
-
-        // Track the method call, regardless of whether it's within the same file or across files
-        methodRegistry.forEach((info, id) => {
-          if (info.name === calleeName) {
-            addEdge(fileName, parentFunction, info.file, calleeName, 'calls');
-          }
-        });
-      }
-    },
-    ArrowFunctionExpression(node) {
-      const id = `${fileName}:arrow`;
-      const { start, end } = node.loc;
-      const lines = `[${start.line}-${end.line}]`;
-      addNode(fileName, 'arrow function', 'method', lines);
-    },
-    ClassDeclaration(node) {
-      const { name } = node.id;
-      const id = `${fileName}:${name}`;
-      const { start, end } = node.loc;
-      const lines = `[${start.line}-${end.line}]`;
-      addNode(fileName, name, 'class', lines);
-    },
-    MethodDefinition(node) {
-      const { name } = node.key;
-      const id = `${fileName}:${name}`;
-      const { start, end } = node.loc;
-      const lines = `[${start.line}-${end.line}]`;
-      addNode(fileName, name, 'method', lines);
-    },
-    VariableDeclarator(node) {
-      const { init } = node;
-      if (
-        init &&
-        (init.type === 'FunctionExpression' ||
-          init.type === 'ArrowFunctionExpression')
-      ) {
-        const { name } = node.id;
-        const id = `${fileName}:${name}`;
-        const { start, end } = node.loc;
-        const lines = `[${start.line}-${end.line}]`;
-        addNode(fileName, name, 'method', lines);
-      }
-    },
-    ExportDefaultDeclaration(node) {
-      const { declaration } = node;
-      if (declaration.type === 'ObjectExpression') {
-        declaration.properties.forEach((prop) => {
-          const { type, value, key, loc } = prop;
-          if (
-            type === 'Property' &&
-            (value.type === 'FunctionExpression' ||
-              value.type === 'ArrowFunctionExpression')
-          ) {
-            const { name } = key;
-            const id = `${fileName}:${name}`;
-            const { start, end } = loc;
-            const lines = `[${start.line}-${end.line}]`;
-            addNode(fileName, name, 'vue-method', lines);
-          }
-        });
-      }
-    },
-    Property(node) {
-      const { value, key, loc } = node;
-      if (
-        value.type === 'FunctionExpression' ||
-        value.type === 'ArrowFunctionExpression'
-      ) {
-        const { name } = key;
-        const id = `${fileName}:${name}`;
-        const { start, end } = loc;
-        const lines = `[${start.line}-${end.line}]`;
-        addNode(fileName, name, 'vue-method', lines);
-      }
-    },
-    });
+    console.warn(`Could not parse ${filePath}: ${error.message}`);
   }
 };
 
-// Function to scan a directory for files to process
 const scanDirectory = (directory) => {
   const ignoreDirs = ['node_modules', '.git', 'build', 'dist'];
   const allowedExtensions = ['.js', '.jsx', '.ts', '.tsx', '.vue', '.mjs'];
   
-  // Function to check if file is likely minified
-  const isMinifiedFile = (filename) => {
-    const baseName = path.basename(filename, path.extname(filename));
-    return baseName.includes('.min') || 
-           baseName.includes('.esm.min') ||
-           baseName.includes('.umd.min') ||
-           baseName.includes('.iife.min') ||
-           /^[a-f0-9]{8,}(\.[a-f0-9]{16,})?$/i.test(baseName) || // webpack chunks (case insensitive)
-           /^[a-z0-9]{3,4}-[a-z0-9]{4,6}$/i.test(baseName) || // chunks like 2N7-oLCw, 3MKP1joc
-           /^[A-Z][a-z0-9]{7}$/i.test(baseName) || // 8-char mixed case like BneFvTpf, CIrwhhrH
-           /^[0-9][a-zA-Z0-9]{7}$/i.test(baseName) || // patterns like 8qprKa4M (number + 7 alphanumeric)
-           /^[A-Z](-[A-Z])?-[a-zA-Z0-9]{4,6}$/i.test(baseName) || // patterns like C-U-RqCb
-           baseName.match(/^\d+\.[a-f0-9]+$/i) || // webpack chunks like 123.abc123def.js
-           filename.includes('bundle') ||
-           filename.includes('vendor') ||
-           filename.includes('polyfill') ||
-           filename.includes('chunk') ||
-           filename.includes('runtime') ||
-           // Common build output patterns
-           filename.includes('.nuxt/') ||
-           filename.includes('dist/') ||
-           filename.includes('build/');
-  };
-  let processedFiles = 0;
-  let totalFiles = 0;
-  const errors = [];
-
-  // First pass: count total files to process
-  const countFiles = (dir) => {
-    let files;
-    try {
-      files = fs.readdirSync(dir);
-    } catch (error) {
-      if (error.code === 'EACCES') {
-        console.warn(`Warning: Permission denied accessing directory '${dir}'`);
-        return;
-      }
-      if (error.code === 'ENOENT') {
-        console.warn(`Warning: Directory '${dir}' not found`);
-        return;
-      }
-      console.warn(`Warning: Error reading directory '${dir}': ${error.message}`);
-      return;
-    }
-
-    for (const file of files) {
-      const filePath = path.join(dir, file);
-      let stat;
-
-      try {
-        stat = fs.statSync(filePath);
-      } catch (error) {
-        if (error.code === 'EACCES') {
-          console.warn(`Warning: Permission denied accessing '${filePath}'`);
-          continue;
-        }
-        console.warn(`Warning: Error accessing '${filePath}': ${error.message}`);
-        continue;
-      }
-
-      if (stat.isDirectory()) {
-        if (!ignoreDirs.includes(file)) {
-          countFiles(filePath);
-        }
-      } else if (stat.isFile()) {
-        const ext = path.extname(file).toLowerCase();
-        if (allowedExtensions.includes(ext) && !isMinifiedFile(file)) {
-          totalFiles++;
-        }
-      }
-    }
+  const isMinifiedFile = (filename, content) => {
+    if (filename.includes('.min.') || filename.includes('/dist/')) return true;
+    if (content && content.substring(0, 500).split('\n').some(line => line.length > 300)) return true;
+    return false;
   };
 
-  // Second pass: process files with progress indication
-  const scan = (dir) => {
-    let files;
+  const walk = (dir) => {
     try {
-      files = fs.readdirSync(dir);
-    } catch (error) {
-      if (error.code === 'EACCES') {
-        console.warn(`Warning: Permission denied accessing directory '${dir}'`);
-        return;
-      }
-      console.warn(`Warning: Error reading directory '${dir}': ${error.message}`);
-      return;
-    }
-
-    for (const file of files) {
-      const filePath = path.join(dir, file);
-      let stat;
-
-      try {
-        stat = fs.statSync(filePath);
-      } catch (error) {
-        if (error.code === 'EACCES') {
-          console.warn(`Warning: Permission denied accessing '${filePath}'`);
-          continue;
-        }
-        console.warn(`Warning: Error accessing '${filePath}': ${error.message}`);
-        continue;
-      }
-
-      if (stat.isDirectory()) {
-        if (!ignoreDirs.includes(file)) {
-          scan(filePath);
-        }
-      } else if (stat.isFile()) {
-        const ext = path.extname(file).toLowerCase();
-        if (allowedExtensions.includes(ext) && !isMinifiedFile(file)) {
-          processedFiles++;
-          console.log(`Processing ${processedFiles}/${totalFiles}: ${path.basename(filePath)}`);
-          try {
-            parseFile(filePath);
-          } catch (error) {
-            const errorMsg = error.code ?
-              `${error.message} (${error.code})` :
-              error.message;
-            console.warn(`Warning: Error parsing '${path.basename(filePath)}': ${errorMsg}`);
-            errors.push({ file: filePath, error: errorMsg });
+      const items = fs.readdirSync(dir);
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+        
+        if (stat.isDirectory() && !ignoreDirs.includes(item)) {
+          walk(fullPath);
+        } else if (stat.isFile() && allowedExtensions.includes(path.extname(item).toLowerCase())) {
+          const content = fs.readFileSync(fullPath, 'utf8');
+          if (!isMinifiedFile(fullPath, content)) {
+            parseFile(fullPath);
           }
         }
       }
+    } catch (error) {
+      // Skip inaccessible directories/files
     }
   };
 
-  // Count files first
-  console.log('Counting files to process...');
-  try {
-    countFiles(directory);
-  } catch (error) {
-    throw createError(`Error counting files in directory '${directory}': ${error.message}`, 'FILE_COUNT_ERROR', { path: directory, originalError: error.message });
-  }
-
-  if (totalFiles === 0) {
-    console.warn(`Warning: No supported files found in directory '${directory}'. Supported extensions: ${allowedExtensions.join(', ')}`);
-    return { processedFiles: 0, totalFiles: 0, errors: [] };
-  }
-
-  console.log(`Found ${totalFiles} files to analyze`);
-
-  // Then process with progress
-  try {
-    scan(directory);
-  } catch (error) {
-    throw createError(`Error scanning directory '${directory}': ${error.message}`, 'DIRECTORY_SCAN_ERROR', { path: directory, originalError: error.message });
-  }
-
-  console.log(`Completed processing ${processedFiles} files`);
-
-  if (errors.length > 0) {
-    console.log(`\nEncountered ${errors.length} parsing errors:`);
-    errors.forEach(({ file, error }, index) => {
-      console.log(`  ${index + 1}. ${path.basename(file)}: ${error}`);
-    });
-  }
-
-  return { processedFiles, totalFiles, errors };
+  walk(directory);
+  return { processedFiles: 0, totalFiles: 0, errors: [] };
 };
 
 // Function to deduplicate nodes and edges
@@ -1044,20 +668,9 @@ if (!options.path) {
   process.exit(1);
 }
 
-// Resolve and validate the input path
-let inputPath;
-try {
-  inputPath = path.resolve(options.path);
-  validatePath(inputPath, 'directory');
-} catch (error) {
-  console.error(`Error: ${error.message}`);
-  if (error.code === 'PATH_NOT_FOUND') {
-    console.error(`Please check that the directory '${options.path}' exists and is accessible.`);
-  } else if (error.code === 'ACCESS_DENIED') {
-    console.error(`Please check the permissions for directory '${options.path}'.`);
-  } else if (error.code === 'INVALID_DIRECTORY') {
-    console.error(`The path '${options.path}' must be a directory, not a file.`);
-  }
+const inputPath = path.resolve(options.path);
+if (!fs.existsSync(inputPath)) {
+  console.error(`Directory '${options.path}' does not exist`);
   process.exit(1);
 }
 
@@ -1068,21 +681,6 @@ if (!['csv', 'gexf', 'graphml', 'dot', 'mermaid'].includes(options.format)) {
   process.exit(1);
 }
 
-// Validate output path if provided
-if (options.output) {
-  try {
-    const outputPath = path.resolve(options.output);
-    validateOutputPath(outputPath);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    if (error.code === 'OUTPUT_DIR_NOT_FOUND') {
-      console.error('Please create the output directory or choose a different path.');
-    } else if (error.code === 'OUTPUT_DIR_NO_WRITE') {
-      console.error('Please check write permissions for the output directory.');
-    }
-    process.exit(1);
-  }
-}
 
 console.log(`Analyzing directory: ${inputPath}`);
 
@@ -1119,7 +717,7 @@ try {
             nodesCsv = uniqueNodes.length > 0 ? parse(uniqueNodes, { fields: nodeFields }) : 'id,label,type,lines\n';
             edgesCsv = uniqueEdges.length > 0 ? parse(uniqueEdges, { fields: edgeFields }) : 'source,target,type\n';
           } catch (error) {
-            throw createError(`Error generating CSV data: ${error.message}`, 'CSV_GENERATION_ERROR', { originalError: error.message });
+            throw new Error(`Error generating CSV data: ${error.message}`);
           }
 
           // Write the CSV files
@@ -1130,10 +728,7 @@ try {
             fs.writeFileSync(nodesFile, nodesCsv);
             fs.writeFileSync(edgesFile, edgesCsv);
           } catch (error) {
-            if (error.code === 'EACCES') {
-              throw createError('Permission denied writing output files', 'OUTPUT_WRITE_DENIED', { files: [nodesFile, edgesFile] });
-            }
-            throw createError(`Error writing output files: ${error.message}`, 'OUTPUT_WRITE_ERROR', { files: [nodesFile, edgesFile], originalError: error.message });
+            throw new Error(`Error writing output files: ${error.message}`);
           }
 
           console.log(`Results saved to ${nodesFile} and ${edgesFile}`);
@@ -1146,7 +741,7 @@ try {
           try {
             gexfContent = generateGexf(uniqueNodes, uniqueEdges);
           } catch (error) {
-            throw createError(`Error generating GEXF data: ${error.message}`, 'GEXF_GENERATION_ERROR', { originalError: error.message });
+            throw new Error(`Error generating GEXF data: ${error.message}`);
           }
 
           // Write the GEXF file
@@ -1155,10 +750,7 @@ try {
           try {
             fs.writeFileSync(gexfFile, gexfContent);
           } catch (error) {
-            if (error.code === 'EACCES') {
-              throw createError('Permission denied writing output file', 'OUTPUT_WRITE_DENIED', { files: [gexfFile] });
-            }
-            throw createError(`Error writing output file: ${error.message}`, 'OUTPUT_WRITE_ERROR', { files: [gexfFile], originalError: error.message });
+            throw new Error(`Error writing file: ${error.message}`);
           }
 
           console.log(`Results saved to ${gexfFile}`);
@@ -1172,7 +764,7 @@ try {
           try {
             graphmlContent = generateGraphml(uniqueNodes, uniqueEdges);
           } catch (error) {
-            throw createError(`Error generating GraphML data: ${error.message}`, 'GRAPHML_GENERATION_ERROR', { originalError: error.message });
+            throw new Error(`Error generating GraphML data: ${error.message}`);
           }
 
           // Write the GraphML file
@@ -1181,10 +773,7 @@ try {
           try {
             fs.writeFileSync(graphmlFile, graphmlContent);
           } catch (error) {
-            if (error.code === 'EACCES') {
-              throw createError('Permission denied writing output file', 'OUTPUT_WRITE_DENIED', { files: [graphmlFile] });
-            }
-            throw createError(`Error writing output file: ${error.message}`, 'OUTPUT_WRITE_ERROR', { files: [graphmlFile], originalError: error.message });
+            throw new Error(`Error writing file: ${error.message}`);
           }
 
           console.log(`Results saved to ${graphmlFile}`);
@@ -1198,7 +787,7 @@ try {
           try {
             dotContent = generateDot(uniqueNodes, uniqueEdges);
           } catch (error) {
-            throw createError(`Error generating DOT data: ${error.message}`, 'DOT_GENERATION_ERROR', { originalError: error.message });
+            throw new Error(`Error generating DOT data: ${error.message}`);
           }
 
           // Write the DOT file
@@ -1207,10 +796,7 @@ try {
           try {
             fs.writeFileSync(dotFile, dotContent);
           } catch (error) {
-            if (error.code === 'EACCES') {
-              throw createError('Permission denied writing output file', 'OUTPUT_WRITE_DENIED', { files: [dotFile] });
-            }
-            throw createError(`Error writing output file: ${error.message}`, 'OUTPUT_WRITE_ERROR', { files: [dotFile], originalError: error.message });
+            throw new Error(`Error writing file: ${error.message}`);
           }
 
           console.log(`Results saved to ${dotFile}`);
@@ -1224,7 +810,7 @@ try {
           try {
             mermaidContent = generateMermaid(uniqueNodes, uniqueEdges);
           } catch (error) {
-            throw createError(`Error generating Mermaid data: ${error.message}`, 'MERMAID_GENERATION_ERROR', { originalError: error.message });
+            throw new Error(`Error generating Mermaid data: ${error.message}`);
           }
 
           // Write the Mermaid file
@@ -1233,10 +819,7 @@ try {
           try {
             fs.writeFileSync(mermaidFile, mermaidContent);
           } catch (error) {
-            if (error.code === 'EACCES') {
-              throw createError('Permission denied writing output file', 'OUTPUT_WRITE_DENIED', { files: [mermaidFile] });
-            }
-            throw createError(`Error writing output file: ${error.message}`, 'OUTPUT_WRITE_ERROR', { files: [mermaidFile], originalError: error.message });
+            throw new Error(`Error writing file: ${error.message}`);
           }
 
           console.log(`Results saved to ${mermaidFile}`);
