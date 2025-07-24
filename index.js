@@ -687,8 +687,8 @@ console.log(`Analyzing directory: ${inputPath}`);
 try {
   const scanResults = scanDirectory(inputPath);
 
-  if (scanResults.processedFiles === 0) {
-    console.log('\nNo files were processed. Analysis complete.');
+  if (nodes.length === 0) {
+    console.log('\nNo nodes found. Analysis complete.');
     process.exit(0);
   }
 

@@ -1,0 +1,4 @@
+"source","target","type"
+"simple_test.js:global","simple_test.js:hello","calls"
+"simple_test.js:global","simple_test.js:goodbye","calls"
+"simple_test.js:global","simple_test.js:main","calls"

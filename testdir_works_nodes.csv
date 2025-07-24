@@ -1,0 +1,4 @@
+"id","label","type","lines"
+"simple_test.js:hello","hello","function","[2-4]"
+"simple_test.js:goodbye","goodbye","function","[6-9]"
+"simple_test.js:main","main","function","[11-14]"
