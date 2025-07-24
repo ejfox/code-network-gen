@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gexf xmlns="http://gexf.net/1.2" version="1.2">
+  <meta lastmodifieddate="2025-07-24">
+    <creator>code-network-gen</creator>
+    <description>Network analysis of JavaScript code structure</description>
+  </meta>
+  <graph mode="static" defaultedgetype="directed">
+    <attributes class="node">
+      <attribute id="0" title="type" type="string"/>
+      <attribute id="1" title="lines" type="integer"/>
+    </attributes>
+    <attributes class="edge">
+      <attribute id="0" title="type" type="string"/>
+    </attributes>
+    <nodes>
+      <node id="index.js:addNode" label="addNode">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[16-20]"/>
+        </attvalues>
+      </node>
+      <node id="index.js:addEdge" label="addEdge">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[22-28]"/>
+        </attvalues>
+      </node>
+      <node id="index.js:generateGexf" label="generateGexf">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[188-257]"/>
+        </attvalues>
+      </node>
+      <node id="index.js:generateGraphml" label="generateGraphml">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[260-318]"/>
+        </attvalues>
+      </node>
+      <node id="index.js:generateDot" label="generateDot">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[321-399]"/>
+        </attvalues>
+      </node>
+      <node id="index.js:generateMermaid" label="generateMermaid">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[402-549]"/>
+        </attvalues>
+      </node>
+      <node id="test.js:test" label="test">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[1-1]"/>
+        </attvalues>
+      </node>
+      <node id="test.js:main" label="main">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[1-1]"/>
+        </attvalues>
+      </node>
+      <node id="simple_test.js:hello" label="hello">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[2-4]"/>
+        </attvalues>
+      </node>
+      <node id="simple_test.js:goodbye" label="goodbye">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[6-9]"/>
+        </attvalues>
+      </node>
+      <node id="simple_test.js:main" label="main">
+        <attvalues>
+          <attvalue for="0" value="function"/>
+          <attvalue for="1" value="[11-14]"/>
+        </attvalues>
+      </node>
+    </nodes>
+    <edges>
+      <edge id="e0" source="index.js:global" target="index.js:addNode">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e1" source="index.js:global" target="index.js:addEdge">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e2" source="index.js:global" target="index.js:generateGexf">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e3" source="index.js:global" target="index.js:generateGraphml">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e4" source="index.js:global" target="index.js:generateDot">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e5" source="index.js:global" target="index.js:generateMermaid">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e6" source="test.js:global" target="test.js:test">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e7" source="simple_test.js:global" target="simple_test.js:hello">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e8" source="simple_test.js:global" target="simple_test.js:goodbye">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e9" source="simple_test.js:global" target="test.js:main">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+      <edge id="e10" source="simple_test.js:global" target="simple_test.js:main">
+        <attvalues>
+          <attvalue for="0" value="calls"/>
+        </attvalues>
+      </edge>
+    </edges>
+  </graph>
+</gexf>

@@ -15,7 +15,8 @@ that's it. creates `my_code_network_nodes.csv` and `my_code_network_edges.csv` i
 ## usage
 
 ```bash
-code-network-gen --path <directory> [-o output_name] [-f format]
+npx code-network-gen --path <directory> [-o output_name] [-f format]
+# or locally: node index.js --path <directory> [-o output_name] [-f format]
 ```
 
 ### options
@@ -29,41 +30,41 @@ code-network-gen --path <directory> [-o output_name] [-f format]
 analyze current directory:
 
 ```bash
-code-network-gen --path .
+npx code-network-gen --path .
 ```
 
 analyze with csv output:
 
 ```bash
-code-network-gen --path ./src -o my_project
+npx code-network-gen --path ./src -o my_project
 # creates: my_project_nodes.csv, my_project_edges.csv
 ```
 
 analyze with gexf output for gephi:
 
 ```bash
-code-network-gen --path ./src -o my_project --format gexf
+npx code-network-gen --path ./src -o my_project --format gexf
 # creates: my_project.gexf (ready to open in Gephi)
 ```
 
 analyze with graphml output for yed/cytoscape:
 
 ```bash
-code-network-gen --path ./src -o my_project --format graphml
+npx code-network-gen --path ./src -o my_project --format graphml
 # creates: my_project.graphml (ready to open in yEd, Cytoscape, etc.)
 ```
 
 analyze with dot output for graphviz:
 
 ```bash
-code-network-gen --path ./src -o my_project --format dot
+npx code-network-gen --path ./src -o my_project --format dot
 # creates: my_project.dot (ready for Graphviz tools)
 ```
 
 analyze with mermaid output for documentation:
 
 ```bash
-code-network-gen --path ./src -o my_project --format mermaid
+npx code-network-gen --path ./src -o my_project --format mermaid
 # creates: my_project.mmd (ready to paste into GitHub, Notion, Obsidian, etc.)
 ```
 

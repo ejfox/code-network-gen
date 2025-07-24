@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns
+         http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <!-- Key definitions for node attributes -->
+  <key id="d0" for="node" attr.name="label" attr.type="string"/>
+  <key id="d1" for="node" attr.name="type" attr.type="string"/>
+  <key id="d2" for="node" attr.name="lines" attr.type="string"/>
+  
+  <!-- Key definitions for edge attributes -->
+  <key id="d3" for="edge" attr.name="type" attr.type="string"/>
+  
+  <graph id="CodeNetwork" edgedefault="directed">
+    <node id="index.js:addNode">
+      <data key="d0">addNode</data>
+      <data key="d1">function</data>
+      <data key="d2">[16-20]</data>
+    </node>
+    <node id="index.js:addEdge">
+      <data key="d0">addEdge</data>
+      <data key="d1">function</data>
+      <data key="d2">[22-28]</data>
+    </node>
+    <node id="index.js:generateGexf">
+      <data key="d0">generateGexf</data>
+      <data key="d1">function</data>
+      <data key="d2">[188-257]</data>
+    </node>
+    <node id="index.js:generateGraphml">
+      <data key="d0">generateGraphml</data>
+      <data key="d1">function</data>
+      <data key="d2">[260-318]</data>
+    </node>
+    <node id="index.js:generateDot">
+      <data key="d0">generateDot</data>
+      <data key="d1">function</data>
+      <data key="d2">[321-399]</data>
+    </node>
+    <node id="index.js:generateMermaid">
+      <data key="d0">generateMermaid</data>
+      <data key="d1">function</data>
+      <data key="d2">[402-549]</data>
+    </node>
+    <node id="test.js:test">
+      <data key="d0">test</data>
+      <data key="d1">function</data>
+      <data key="d2">[1-1]</data>
+    </node>
+    <node id="test.js:main">
+      <data key="d0">main</data>
+      <data key="d1">function</data>
+      <data key="d2">[1-1]</data>
+    </node>
+    <node id="simple_test.js:hello">
+      <data key="d0">hello</data>
+      <data key="d1">function</data>
+      <data key="d2">[2-4]</data>
+    </node>
+    <node id="simple_test.js:goodbye">
+      <data key="d0">goodbye</data>
+      <data key="d1">function</data>
+      <data key="d2">[6-9]</data>
+    </node>
+    <node id="simple_test.js:main">
+      <data key="d0">main</data>
+      <data key="d1">function</data>
+      <data key="d2">[11-14]</data>
+    </node>
+    <edge id="e0" source="index.js:global" target="index.js:addNode">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e1" source="index.js:global" target="index.js:addEdge">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e2" source="index.js:global" target="index.js:generateGexf">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e3" source="index.js:global" target="index.js:generateGraphml">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e4" source="index.js:global" target="index.js:generateDot">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e5" source="index.js:global" target="index.js:generateMermaid">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e6" source="test.js:global" target="test.js:test">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e7" source="simple_test.js:global" target="simple_test.js:hello">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e8" source="simple_test.js:global" target="simple_test.js:goodbye">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e9" source="simple_test.js:global" target="test.js:main">
+      <data key="d3">calls</data>
+    </edge>
+    <edge id="e10" source="simple_test.js:global" target="simple_test.js:main">
+      <data key="d3">calls</data>
+    </edge>
+  </graph>
+</graphml>

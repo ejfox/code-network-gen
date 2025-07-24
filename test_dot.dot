@@ -1,0 +1,32 @@
+digraph CodeNetwork {
+  // Graph attributes
+  graph [rankdir=TB, splines=true];
+  node [shape=box, style=filled, fillcolor=lightblue];
+  edge [color=gray];
+
+  // Nodes
+  "index.js:addNode" [label="addNode\n[16-20]\n(function)", fillcolor=lightgreen];
+  "index.js:addEdge" [label="addEdge\n[22-28]\n(function)", fillcolor=lightgreen];
+  "index.js:generateGexf" [label="generateGexf\n[188-257]\n(function)", fillcolor=lightgreen];
+  "index.js:generateGraphml" [label="generateGraphml\n[260-318]\n(function)", fillcolor=lightgreen];
+  "index.js:generateDot" [label="generateDot\n[321-399]\n(function)", fillcolor=lightgreen];
+  "index.js:generateMermaid" [label="generateMermaid\n[402-549]\n(function)", fillcolor=lightgreen];
+  "test.js:test" [label="test\n[1-1]\n(function)", fillcolor=lightgreen];
+  "test.js:main" [label="main\n[1-1]\n(function)", fillcolor=lightgreen];
+  "simple_test.js:hello" [label="hello\n[2-4]\n(function)", fillcolor=lightgreen];
+  "simple_test.js:goodbye" [label="goodbye\n[6-9]\n(function)", fillcolor=lightgreen];
+  "simple_test.js:main" [label="main\n[11-14]\n(function)", fillcolor=lightgreen];
+
+  // Edges
+  "index.js:global" -> "index.js:addNode" [color=blue, label="calls"];
+  "index.js:global" -> "index.js:addEdge" [color=blue, label="calls"];
+  "index.js:global" -> "index.js:generateGexf" [color=blue, label="calls"];
+  "index.js:global" -> "index.js:generateGraphml" [color=blue, label="calls"];
+  "index.js:global" -> "index.js:generateDot" [color=blue, label="calls"];
+  "index.js:global" -> "index.js:generateMermaid" [color=blue, label="calls"];
+  "test.js:global" -> "test.js:test" [color=blue, label="calls"];
+  "simple_test.js:global" -> "simple_test.js:hello" [color=blue, label="calls"];
+  "simple_test.js:global" -> "simple_test.js:goodbye" [color=blue, label="calls"];
+  "simple_test.js:global" -> "test.js:main" [color=blue, label="calls"];
+  "simple_test.js:global" -> "simple_test.js:main" [color=blue, label="calls"];
+}
