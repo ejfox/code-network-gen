@@ -12,8 +12,11 @@ const nodes = [];
 const edges = [];
 const methodRegistry = new Map(); // To store method definitions by file and name
 
-// Function to add package.json dependencies to the network
-function addPackageDependencies(directoryPath) {
+// Store available dependencies for efficient lookup
+let availableDependencies = new Set();
+
+// Function to load package.json dependencies for reference
+function loadPackageDependencies(directoryPath) {
   const packagePath = path.join(directoryPath, 'package.json');
   if (!fs.existsSync(packagePath)) return;
   
@@ -26,17 +29,8 @@ function addPackageDependencies(directoryPath) {
       ...packageData.devDependencies || {}
     };
     
-    // Add dependency nodes
-    Object.keys(deps).forEach(depName => {
-      addNode('package.json', depName, 'dependency', '[-]');
-    });
-    
-    // Add edges from global scope to dependencies (simulating imports)
-    Object.keys(deps).forEach(depName => {
-      addEdge('package.json', 'global', 'package.json', depName, 'requires');
-    });
-    
-    console.log(`Added ${Object.keys(deps).length} dependencies from package.json`);
+    availableDependencies = new Set(Object.keys(deps));
+    console.log(`Loaded ${availableDependencies.size} dependencies for import tracking`);
   } catch (error) {
     console.warn(`Could not parse package.json: ${error.message}`);
   }
@@ -89,7 +83,24 @@ const parseJavaScript = (filePath, content) => {
           addNode(fileName, node.id.name, 'function', lines);
         }
       },
+      ImportDeclaration(node) {
+        if (node.source?.value && availableDependencies.has(node.source.value)) {
+          const depName = node.source.value;
+          addNode('package.json', depName, 'dependency', '[-]');
+          addEdge(fileName, 'global', 'package.json', depName, 'imports');
+        }
+      },
       CallExpression(node) {
+        // Handle require() calls
+        if (node.callee?.name === 'require' && node.arguments[0]?.type === 'Literal') {
+          const depName = node.arguments[0].value;
+          if (availableDependencies.has(depName)) {
+            const parentFunction = getEnclosingFunctionName(node);
+            addNode('package.json', depName, 'dependency', '[-]');
+            addEdge(fileName, parentFunction, 'package.json', depName, 'requires');
+          }
+        }
+        // Handle function calls
         if (node.callee?.type === 'Identifier') {
           const calleeName = node.callee.name;
           const parentFunction = getEnclosingFunctionName(node);
@@ -721,12 +732,12 @@ if (!['csv', 'gexf', 'graphml', 'dot', 'mermaid'].includes(options.format)) {
 console.log(`Analyzing directory: ${inputPath}`);
 
 try {
-  const scanResults = scanDirectory(inputPath);
-  
-  // Add package.json dependencies if requested
+  // Load package.json dependencies if requested (before scanning)
   if (options.includeDeps) {
-    addPackageDependencies(inputPath);
+    loadPackageDependencies(inputPath);
   }
+  
+  const scanResults = scanDirectory(inputPath);
 
   if (nodes.length === 0) {
     console.log('\nNo nodes found. Analysis complete.');
