@@ -142,7 +142,7 @@ const scanDirectory = (directory) => {
           }
         }
       }
-    } catch {
+    } catch (_err) {
       // Skip inaccessible directories/files
     }
   };
