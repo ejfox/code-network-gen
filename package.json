@@ -1,6 +1,6 @@
 {
   "name": "code-network-gen",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "description": "Explore your JavaScript ecosystem with this network-based code structure analysis tool",
   "main": "index.js",
   "bin": {
@@ -53,17 +53,19 @@
     "url": "https://github.com/ejfox/code-network-gen/issues"
   },
   "dependencies": {
-    "@babel/parser": "^7.28.0",
-    "@babel/traverse": "^7.28.0",
-    "@typescript-eslint/parser": "^8.38.0",
-    "acorn": "^8.12.1",
-    "acorn-walk": "^8.3.3",
-    "commander": "^12.1.0",
-    "json2csv": "^6.0.0-alpha.2",
-    "vue-template-compiler": "^2.7.16"
+    "@typescript-eslint/parser": "^8.52.0",
+    "@vue/compiler-sfc": "^3.5.26",
+    "acorn": "^8.15.0",
+    "acorn-walk": "^8.3.4",
+    "commander": "^14.0.2",
+    "json2csv": "^6.0.0-alpha.2"
   },
   "devDependencies": {
-    "eslint": "^8.0.0",
-    "prettier": "^3.0.0"
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "prettier": "^3.7.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
