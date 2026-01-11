@@ -4,10 +4,8 @@ const path = require('path');
 const acorn = require('acorn');
 const walk = require('acorn-walk');
 const { program } = require('commander');
-const compiler = require('vue-template-compiler');
+const { parse: parseVueComponent } = require('@vue/compiler-sfc');
 const { parse } = require('json2csv');
-const { parse: babelParse } = require('@babel/parser');
-const traverse = require('@babel/traverse').default;
 const nodes = [];
 const edges = [];
 const methodRegistry = new Map(); // To store method definitions by file and name
@@ -19,16 +17,16 @@ let availableDependencies = new Set();
 function loadPackageDependencies(directoryPath) {
   const packagePath = path.join(directoryPath, 'package.json');
   if (!fs.existsSync(packagePath)) return;
-  
+
   try {
     const packageContent = fs.readFileSync(packagePath, 'utf8');
     const packageData = JSON.parse(packageContent);
-    
+
     const deps = {
       ...packageData.dependencies || {},
-      ...packageData.devDependencies || {}
+      ...packageData.devDependencies || {},
     };
-    
+
     availableDependencies = new Set(Object.keys(deps));
     console.log(`Loaded ${availableDependencies.size} dependencies for import tracking`);
   } catch (error) {
@@ -54,10 +52,11 @@ function addEdge(sourceFile, sourceMethod, targetFile, targetMethod, type) {
 const parseFile = (filePath) => {
   const content = fs.readFileSync(filePath, 'utf8');
   const ext = path.extname(filePath).toLowerCase();
-  
+
   if (ext === '.vue') {
-    const parsed = compiler.parseComponent(content);
-    if (parsed.script) parseJavaScript(filePath, parsed.script.content);
+    const { descriptor } = parseVueComponent(content, { filename: filePath });
+    if (descriptor.script) parseJavaScript(filePath, descriptor.script.content);
+    if (descriptor.scriptSetup) parseJavaScript(filePath, descriptor.scriptSetup.content);
   } else {
     parseJavaScript(filePath, content);
   }
@@ -75,7 +74,7 @@ const parseJavaScript = (filePath, content) => {
   try {
     const ast = acorn.parse(content, { ecmaVersion: 'latest', sourceType: 'module', locations: true });
     const fileName = path.basename(filePath);
-    
+
     walk.simple(ast, {
       FunctionDeclaration(node) {
         if (node.id?.name) {
@@ -110,7 +109,7 @@ const parseJavaScript = (filePath, content) => {
             }
           });
         }
-      }
+      },
     });
   } catch (error) {
     console.warn(`Could not parse ${filePath}: ${error.message}`);
@@ -120,7 +119,7 @@ const parseJavaScript = (filePath, content) => {
 const scanDirectory = (directory) => {
   const ignoreDirs = ['node_modules', '.git', 'build', 'dist'];
   const allowedExtensions = ['.js', '.jsx', '.ts', '.tsx', '.vue', '.mjs'];
-  
+
   const isMinifiedFile = (filename, content) => {
     if (filename.includes('.min.') || filename.includes('/dist/')) return true;
     if (content && content.substring(0, 500).split('\n').some(line => line.length > 300)) return true;
@@ -133,7 +132,7 @@ const scanDirectory = (directory) => {
       for (const item of items) {
         const fullPath = path.join(dir, item);
         const stat = fs.statSync(fullPath);
-        
+
         if (stat.isDirectory() && !ignoreDirs.includes(item)) {
           walk(fullPath);
         } else if (stat.isFile() && allowedExtensions.includes(path.extname(item).toLowerCase())) {
@@ -143,7 +142,7 @@ const scanDirectory = (directory) => {
           }
         }
       }
-    } catch (error) {
+    } catch {
       // Skip inaccessible directories/files
     }
   };
@@ -237,7 +236,7 @@ function generateGexf(nodes, edges) {
   };
 
   const timestamp = new Date().toISOString().split('T')[0];
-  
+
   let gexf = `<?xml version="1.0" encoding="UTF-8"?>
 <gexf xmlns="http://gexf.net/1.2" version="1.2">
   <meta lastmodifieddate="${timestamp}">
@@ -256,12 +255,12 @@ function generateGexf(nodes, edges) {
 `;
 
   // Add nodes
-  nodes.forEach((node, index) => {
+  nodes.forEach((node) => {
     const nodeId = escapeXml(node.id);
     const nodeLabel = escapeXml(node.label || node.id);
     const nodeType = escapeXml(node.type || 'unknown');
     const nodeLines = node.lines || 0;
-    
+
     gexf += `      <node id="${nodeId}" label="${nodeLabel}">
         <attvalues>
           <attvalue for="0" value="${nodeType}"/>
@@ -281,7 +280,7 @@ function generateGexf(nodes, edges) {
     const source = escapeXml(edge.source);
     const target = escapeXml(edge.target);
     const edgeType = escapeXml(edge.type || 'unknown');
-    
+
     gexf += `      <edge id="${edgeId}" source="${source}" target="${target}">
         <attvalues>
           <attvalue for="0" value="${edgeType}"/>
@@ -330,7 +329,7 @@ function generateGraphml(nodes, edges) {
     const nodeLabel = escapeXml(node.label || node.id);
     const nodeType = escapeXml(node.type || 'unknown');
     const nodeLines = escapeXml(node.lines || '');
-    
+
     graphml += `    <node id="${nodeId}">
       <data key="d0">${nodeLabel}</data>
       <data key="d1">${nodeType}</data>
@@ -345,7 +344,7 @@ function generateGraphml(nodes, edges) {
     const source = escapeXml(edge.source);
     const target = escapeXml(edge.target);
     const edgeType = escapeXml(edge.type || 'unknown');
-    
+
     graphml += `    <edge id="${edgeId}" source="${source}" target="${target}">
       <data key="d3">${edgeType}</data>
     </edge>
@@ -366,20 +365,20 @@ function generateDot(nodes, edges) {
       .replace(/"/g, '\\"');   // Escape double quotes
   };
 
-  let dot = `digraph CodeNetwork {\n`;
-  dot += `  // Graph attributes\n`;
-  dot += `  graph [rankdir=TB, splines=true];\n`;
-  dot += `  node [shape=box, style=filled, fillcolor=lightblue];\n`;
-  dot += `  edge [color=gray];\n\n`;
+  let dot = 'digraph CodeNetwork {\n';
+  dot += '  // Graph attributes\n';
+  dot += '  graph [rankdir=TB, splines=true];\n';
+  dot += '  node [shape=box, style=filled, fillcolor=lightblue];\n';
+  dot += '  edge [color=gray];\n\n';
 
   // Add nodes
-  dot += `  // Nodes\n`;
+  dot += '  // Nodes\n';
   nodes.forEach((node) => {
     const nodeId = escapeDot(node.id);
     const nodeLabel = escapeDot(node.label || node.id);
     const nodeType = node.type || 'unknown';
     const nodeLines = node.lines || '';
-    
+
     // Create a more descriptive label
     let fullLabel = nodeLabel;
     if (nodeLines) {
@@ -388,53 +387,53 @@ function generateDot(nodes, edges) {
     if (nodeType) {
       fullLabel += `\\n(${nodeType})`;
     }
-    
+
     // Set different colors based on node type
     let nodeColor = 'lightblue';
     switch (nodeType) {
-      case 'function':
-        nodeColor = 'lightgreen';
-        break;
-      case 'method':
-        nodeColor = 'lightcoral';
-        break;
-      case 'class':
-        nodeColor = 'lightyellow';
-        break;
-      case 'vue-method':
-        nodeColor = 'lightpink';
-        break;
-      default:
-        nodeColor = 'lightgray';
+    case 'function':
+      nodeColor = 'lightgreen';
+      break;
+    case 'method':
+      nodeColor = 'lightcoral';
+      break;
+    case 'class':
+      nodeColor = 'lightyellow';
+      break;
+    case 'vue-method':
+      nodeColor = 'lightpink';
+      break;
+    default:
+      nodeColor = 'lightgray';
     }
-    
+
     dot += `  "${nodeId}" [label="${fullLabel}", fillcolor=${nodeColor}];\n`;
   });
 
-  dot += `\n  // Edges\n`;
+  dot += '\n  // Edges\n';
   // Add edges
   edges.forEach((edge) => {
     const source = escapeDot(edge.source);
     const target = escapeDot(edge.target);
     const edgeType = edge.type || 'unknown';
-    
+
     // Set different edge styles based on edge type
     let edgeStyle = '';
     switch (edgeType) {
-      case 'calls':
-        edgeStyle = ' [color=blue, label="calls"]';
-        break;
-      case 'imports':
-        edgeStyle = ' [color=green, label="imports", style=dashed]';
-        break;
-      default:
-        edgeStyle = ` [label="${edgeType}"]`;
+    case 'calls':
+      edgeStyle = ' [color=blue, label="calls"]';
+      break;
+    case 'imports':
+      edgeStyle = ' [color=green, label="imports", style=dashed]';
+      break;
+    default:
+      edgeStyle = ` [label="${edgeType}"]`;
     }
-    
+
     dot += `  "${source}" -> "${target}"${edgeStyle};\n`;
   });
 
-  dot += `}\n`;
+  dot += '}\n';
 
   return dot;
 }
@@ -463,32 +462,32 @@ function generateMermaid(nodes, edges) {
     const label = node.label || node.id.split(':').pop() || 'unknown';
     const type = node.type || 'unknown';
     const lines = node.lines || '';
-    
+
     // Create a descriptive label
     let fullLabel = label;
     if (lines) {
       fullLabel += ` ${lines}`;
     }
     fullLabel += ` (${type})`;
-    
+
     return fullLabel.replace(/["']/g, ''); // Remove quotes to avoid syntax issues
   };
 
   const getNodeShape = (nodeType) => {
     // Return appropriate Mermaid node shape based on type
     switch (nodeType) {
-      case 'function':
-        return ['[', ']'];     // Rectangle for functions
-      case 'method':
-        return ['(', ')'];     // Round edges for methods
-      case 'class':
-        return ['{{', '}}'];   // Hexagon for classes
-      case 'vue-method':
-        return ['([', '])'];   // Stadium shape for Vue methods
-      case 'global':
-        return ['>', ']'];     // Asymmetric shape for global scope
-      default:
-        return ['[', ']'];     // Default rectangle
+    case 'function':
+      return ['[', ']'];     // Rectangle for functions
+    case 'method':
+      return ['(', ')'];     // Round edges for methods
+    case 'class':
+      return ['{{', '}}'];   // Hexagon for classes
+    case 'vue-method':
+      return ['([', '])'];   // Stadium shape for Vue methods
+    case 'global':
+      return ['>', ']'];     // Asymmetric shape for global scope
+    default:
+      return ['[', ']'];     // Default rectangle
     }
   };
 
@@ -496,8 +495,8 @@ function generateMermaid(nodes, edges) {
   const filteredData = filterForMermaid(nodes, edges);
   const { nodes: filteredNodes, edges: filteredEdges } = filteredData;
 
-  let mermaid = `flowchart TD\n`;
-  mermaid += `    %% Code Network Analysis - Generated by code-network-gen\n`;
+  let mermaid = 'flowchart TD\n';
+  mermaid += '    %% Code Network Analysis - Generated by code-network-gen\n';
   mermaid += `    %% Total nodes: ${filteredNodes.length}, Total edges: ${filteredEdges.length}\n\n`;
 
   // Create a mapping of original IDs to Mermaid-safe IDs
@@ -512,47 +511,47 @@ function generateMermaid(nodes, edges) {
     const nodeId = idMapping.get(node.id);
     const nodeLabel = createNodeLabel(node);
     const [shapeStart, shapeEnd] = getNodeShape(node.type);
-    
+
     mermaid += `    ${nodeId}${shapeStart}"${nodeLabel}"${shapeEnd}\n`;
   });
 
   if (filteredNodes.length > 0 && filteredEdges.length > 0) {
-    mermaid += `\n    %% Connections\n`;
+    mermaid += '\n    %% Connections\n';
   }
 
   // Add edges with appropriate arrow styles
   filteredEdges.forEach((edge) => {
     const sourceId = idMapping.get(edge.source);
     const targetId = idMapping.get(edge.target);
-    
+
     if (sourceId && targetId) {
       const edgeType = edge.type || 'unknown';
       let arrowStyle = '-->';
-      
+
       // Use different arrow styles based on edge type
       switch (edgeType) {
-        case 'calls':
-          arrowStyle = '-->';
-          break;
-        case 'imports':
-          arrowStyle = '-.->'; // Dotted line for imports
-          break;
-        default:
-          arrowStyle = '-->';
+      case 'calls':
+        arrowStyle = '-->';
+        break;
+      case 'imports':
+        arrowStyle = '-.->'; // Dotted line for imports
+        break;
+      default:
+        arrowStyle = '-->';
       }
-      
+
       mermaid += `    ${sourceId} ${arrowStyle} ${targetId}\n`;
     }
   });
 
   // Add styling for different node types
-  mermaid += `\n    %% Styling\n`;
-  mermaid += `    classDef functionClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px\n`;
-  mermaid += `    classDef methodClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px\n`;
-  mermaid += `    classDef classClass fill:#fff3e0,stroke:#e65100,stroke-width:2px\n`;
-  mermaid += `    classDef vueMethodClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px\n`;
-  mermaid += `    classDef globalClass fill:#ffebee,stroke:#c62828,stroke-width:2px\n`;
-  mermaid += `    classDef dependencyClass fill:#fff8e1,stroke:#ff8f00,stroke-width:2px\n`;
+  mermaid += '\n    %% Styling\n';
+  mermaid += '    classDef functionClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px\n';
+  mermaid += '    classDef methodClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px\n';
+  mermaid += '    classDef classClass fill:#fff3e0,stroke:#e65100,stroke-width:2px\n';
+  mermaid += '    classDef vueMethodClass fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px\n';
+  mermaid += '    classDef globalClass fill:#ffebee,stroke:#c62828,stroke-width:2px\n';
+  mermaid += '    classDef dependencyClass fill:#fff8e1,stroke:#ff8f00,stroke-width:2px\n';
 
   // Apply classes to nodes
   const nodesByType = {
@@ -561,7 +560,7 @@ function generateMermaid(nodes, edges) {
     class: [],
     'vue-method': [],
     global: [],
-    dependency: []
+    dependency: [],
   };
 
   filteredNodes.forEach((node) => {
@@ -604,12 +603,12 @@ function filterForMermaid(nodes, edges) {
     // Add global nodes that are referenced in edges but don't exist as nodes
     const nodeIds = new Set(nodes.map(node => node.id));
     const referencedIds = new Set();
-    
+
     edges.forEach(edge => {
       referencedIds.add(edge.source);
       referencedIds.add(edge.target);
     });
-    
+
     const additionalNodes = [];
     referencedIds.forEach(id => {
       if (!nodeIds.has(id)) {
@@ -620,25 +619,25 @@ function filterForMermaid(nodes, edges) {
             id,
             label: `${fileName} (global)`,
             type: 'global',
-            lines: ''
+            lines: '',
           });
         }
       }
     });
-    
+
     const allNodes = [...nodes, ...additionalNodes];
     const allNodeIds = new Set(allNodes.map(node => node.id));
-    const validEdges = edges.filter(edge => 
-      allNodeIds.has(edge.source) && allNodeIds.has(edge.target)
+    const validEdges = edges.filter(edge =>
+      allNodeIds.has(edge.source) && allNodeIds.has(edge.target),
     );
-    
+
     return { nodes: allNodes, edges: validEdges };
   }
 
   // Create a graph to analyze node importance
   const nodeConnections = new Map();
   const nodeTypes = new Map();
-  
+
   // Initialize connection counts and store types
   nodes.forEach(node => {
     nodeConnections.set(node.id, 0);
@@ -661,17 +660,17 @@ function filterForMermaid(nodes, edges) {
     'class': 3,
     'function': 2,
     'method': 1,
-    'vue-method': 1
+    'vue-method': 1,
   };
 
   const scoredNodes = nodes.map(node => {
     const connections = nodeConnections.get(node.id) || 0;
     const typeScore = typeScores[node.type] || 0;
     const nameLength = (node.label || node.id).length;
-    
+
     // Prioritize highly connected nodes, important types, and shorter names
     const score = (connections * 5) + (typeScore * 3) + Math.max(0, (50 - nameLength) / 10);
-    
+
     return { ...node, score, connections };
   });
 
@@ -691,14 +690,14 @@ function filterForMermaid(nodes, edges) {
     })
     .slice(0, MAX_EDGES); // Additional safety limit
 
-  return { 
-    nodes: filteredNodes, 
-    edges: filteredEdges 
+  return {
+    nodes: filteredNodes,
+    edges: filteredEdges,
   };
 }
 
 program
-  .version('0.0.3')
+  .version('0.1.0')
   .description('A CLI tool for analyzing JavaScript code structure')
   .option('-p, --path <directory>', 'Path to the directory to analyze')
   .option('-o, --output <file>', 'Output filename for the analysis results')
@@ -736,7 +735,7 @@ try {
   if (options.includeDeps) {
     loadPackageDependencies(inputPath);
   }
-  
+
   const scanResults = scanDirectory(inputPath);
 
   if (nodes.length === 0) {
@@ -789,7 +788,7 @@ try {
         } else if (options.format === 'gexf') {
           // Generate GEXF content
           let gexfContent;
-          
+
           try {
             gexfContent = generateGexf(uniqueNodes, uniqueEdges);
           } catch (error) {
@@ -808,11 +807,11 @@ try {
           console.log(`Results saved to ${gexfFile}`);
           console.log(`  - Nodes: ${uniqueNodes.length} entries`);
           console.log(`  - Edges: ${uniqueEdges.length} entries`);
-          console.log(`  - Format: GEXF (Graph Exchange XML Format) for Gephi`);
+          console.log('  - Format: GEXF (Graph Exchange XML Format) for Gephi');
         } else if (options.format === 'graphml') {
           // Generate GraphML content
           let graphmlContent;
-          
+
           try {
             graphmlContent = generateGraphml(uniqueNodes, uniqueEdges);
           } catch (error) {
@@ -831,11 +830,11 @@ try {
           console.log(`Results saved to ${graphmlFile}`);
           console.log(`  - Nodes: ${uniqueNodes.length} entries`);
           console.log(`  - Edges: ${uniqueEdges.length} entries`);
-          console.log(`  - Format: GraphML (Graph Markup Language) for yEd, Cytoscape, etc.`);
+          console.log('  - Format: GraphML (Graph Markup Language) for yEd, Cytoscape, etc.');
         } else if (options.format === 'dot') {
           // Generate DOT content
           let dotContent;
-          
+
           try {
             dotContent = generateDot(uniqueNodes, uniqueEdges);
           } catch (error) {
@@ -854,11 +853,11 @@ try {
           console.log(`Results saved to ${dotFile}`);
           console.log(`  - Nodes: ${uniqueNodes.length} entries`);
           console.log(`  - Edges: ${uniqueEdges.length} entries`);
-          console.log(`  - Format: DOT (Graphviz) for dot, neato, fdp, circo, twopi, sfdp`);
+          console.log('  - Format: DOT (Graphviz) for dot, neato, fdp, circo, twopi, sfdp');
         } else if (options.format === 'mermaid') {
           // Generate Mermaid content
           let mermaidContent;
-          
+
           try {
             mermaidContent = generateMermaid(uniqueNodes, uniqueEdges);
           } catch (error) {
@@ -877,7 +876,7 @@ try {
           console.log(`Results saved to ${mermaidFile}`);
           console.log(`  - Nodes: ${uniqueNodes.length} entries (filtered for readability)`);
           console.log(`  - Edges: ${uniqueEdges.length} entries (filtered for readability)`);
-          console.log(`  - Format: Mermaid flowchart for GitHub, Notion, Obsidian, etc.`);
+          console.log('  - Format: Mermaid flowchart for GitHub, Notion, Obsidian, etc.');
         }
       }
     } catch (error) {
