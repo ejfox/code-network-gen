@@ -1,16 +1,25 @@
 # code-network-gen
 
-parses js/vue codebases and outputs function call networks as csv or gexf files. useful for understanding code structure, dependencies, and architectural patterns.
+parses JavaScript, TypeScript, and Vue codebases, then outputs function call networks as CSV, GEXF, GraphML, DOT, or Mermaid files. useful for understanding code structure, dependencies, and architectural patterns.
+
+## ethos
+
+code-network-gen should stay boring in the best way:
+
+- one command should produce useful architecture data in seconds
+- outputs should be portable, plain-text, and easy to import elsewhere
+- the graph should faithfully reflect the codebase, including awkward real-world code
+- implementation details should serve the map, not make the tool harder to trust
 
 ## quick start
 
 analyze any codebase in one command:
 
 ```bash
-npx code-network-gen --path . -o my_code_network
+npx code-network-gen --path . -o output/my_code_network
 ```
 
-that's it. creates `my_code_network_nodes.csv` and `my_code_network_edges.csv` in seconds.
+that's it. creates `output/my_code_network_nodes.csv` and `output/my_code_network_edges.csv` in seconds.
 
 ## example output
 
@@ -118,42 +127,44 @@ npx code-network-gen --path .
 analyze with csv output:
 
 ```bash
-npx code-network-gen --path ./src -o my_project
-# creates: my_project_nodes.csv, my_project_edges.csv
+npx code-network-gen --path ./src -o output/my_project
+# creates: output/my_project_nodes.csv, output/my_project_edges.csv
 ```
+
+output directories are created automatically.
 
 analyze with gexf output for gephi:
 
 ```bash
-npx code-network-gen --path ./src -o my_project --format gexf
-# creates: my_project.gexf (ready to open in Gephi)
+npx code-network-gen --path ./src -o output/my_project --format gexf
+# creates: output/my_project.gexf (ready to open in Gephi)
 ```
 
 analyze with graphml output for yed/cytoscape:
 
 ```bash
-npx code-network-gen --path ./src -o my_project --format graphml
-# creates: my_project.graphml (ready to open in yEd, Cytoscape, etc.)
+npx code-network-gen --path ./src -o output/my_project --format graphml
+# creates: output/my_project.graphml (ready to open in yEd, Cytoscape, etc.)
 ```
 
 analyze with dot output for graphviz:
 
 ```bash
-npx code-network-gen --path ./src -o my_project --format dot
-# creates: my_project.dot (ready for Graphviz tools)
+npx code-network-gen --path ./src -o output/my_project --format dot
+# creates: output/my_project.dot (ready for Graphviz tools)
 ```
 
 analyze with mermaid output for documentation:
 
 ```bash
-npx code-network-gen --path ./src -o my_project --format mermaid
-# creates: my_project.mmd (ready to paste into GitHub, Notion, Obsidian, etc.)
+npx code-network-gen --path ./src -o output/my_project --format mermaid
+# creates: output/my_project.mmd (ready to paste into GitHub, Notion, Obsidian, etc.)
 ```
 
 include package.json dependencies in analysis:
 
 ```bash
-npx code-network-gen --path . --include-deps -o my_project
+npx code-network-gen --path . --include-deps -o output/my_project
 # tracks actual import/require statements to show real dependency usage
 # creates edges like: data.js:global -> package.json:axios (imports)
 ```
@@ -167,6 +178,8 @@ npx code-network-gen --path . --include-deps -o my_project
 - function calls and their relationships
 
 supports: `.js`, `.jsx`, `.ts`, `.tsx`, `.vue`
+
+also supports `.mjs` and `.cjs` files.
 
 ## output formats
 
@@ -228,9 +241,27 @@ src/app.js:global,src/utils.js:formatDate,calls
 ```bash
 git clone <repo>
 npm install
-npm test  # runs meta-analysis (tool analyzes itself)
+npm test
 npm run lint
 ```
+
+## project layout
+
+```text
+.
+├── index.js              # executable CLI entry point
+├── lib/                  # scanner, parser, analyzer, graph, formatters, CLI
+├── test/                 # test runner and fixtures
+├── examples/             # checked-in sample outputs
+│   ├── csv/
+│   ├── external/
+│   ├── graphs/
+│   └── mermaid/
+├── docs/                 # notes and historical context
+└── output/               # ignored local analysis output
+```
+
+the root stays intentionally boring: package files, config, source, tests, docs, and examples.
 
 ## import into tools
 
@@ -268,9 +299,8 @@ npm run lint
 ## how it works
 
 1. walks directory tree
-2. parses ast with acorn
+2. parses javascript, typescript, and vue scripts into asts
 3. extracts function definitions and calls
-4. outputs network graph as csv
+4. outputs network graph files for the selected format
 
 that's it.
-

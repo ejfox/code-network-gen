@@ -8,13 +8,13 @@
   },
   "scripts": {
     "start": "node index.js",
-    "test": "node test.js",
-    "meta": "node index.js --path . -o meta_analysis && echo 'Meta-analysis results saved to meta_analysis_nodes.csv and meta_analysis_edges.csv'",
-    "lint": "eslint *.js",
-    "lint:fix": "eslint *.js --fix",
-    "format": "prettier --write *.js",
-    "format:check": "prettier --check *.js",
-    "analyze": "node index.js --path . -o analysis",
+    "test": "node test/run.js",
+    "meta": "node index.js --path . -o output/meta_analysis && echo 'Meta-analysis results saved to output/meta_analysis_nodes.csv and output/meta_analysis_edges.csv'",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"*.js\" \"lib/**/*.js\" \"test/**/*.js\" package.json .prettierrc",
+    "format:check": "prettier --check \"*.js\" \"lib/**/*.js\" \"test/**/*.js\" package.json .prettierrc",
+    "analyze": "node index.js --path . -o output/analysis",
     "dev": "node index.js"
   },
   "keywords": [
@@ -55,10 +55,9 @@
   "dependencies": {
     "@typescript-eslint/parser": "^8.52.0",
     "@vue/compiler-sfc": "^3.5.26",
-    "acorn": "^8.15.0",
-    "acorn-walk": "^8.3.4",
     "commander": "^14.0.2",
-    "json2csv": "^6.0.0-alpha.2"
+    "json2csv": "^6.0.0-alpha.2",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

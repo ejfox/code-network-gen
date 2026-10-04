@@ -1,4 +1,3 @@
-
 function hello() {
   console.log('world');
 }
@@ -14,4 +13,3 @@ function main() {
 }
 
 main();
-
