@@ -115,8 +115,15 @@ npx code-network-gen --path <directory> [-o output_name] [-f format]
 - `-o` - output file prefix (optional, outputs to console if omitted)
 - `-f, --format` - output format: `csv` (default), `gexf` (for Gephi), `graphml` (for yEd, Cytoscape), `dot` (for Graphviz), or `mermaid` (for GitHub, Notion, etc.)
 - `--include-deps` - parse import/require statements to track actual dependency usage
+- `--ignore <dirs>` - comma-separated directory names to skip, on top of the defaults (`.claude`, `.git`, `.next`, `.nuxt`, `.output`, `.turbo`, `build`, `coverage`, `dist`, `node_modules`, `out`)
 
 ### examples
+
+skip vendored and generated folders:
+
+```bash
+npx code-network-gen --path . --ignore vendor,public,data -o output/my_project
+```
 
 analyze current directory:
 

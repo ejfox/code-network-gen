@@ -14,7 +14,7 @@ const {
   generateGraphml,
   generateMermaid,
 } = require('../lib/formatters');
-const { writeOutput } = require('../lib/cli');
+const { createProgram, writeOutput } = require('../lib/cli');
 
 function withTempProject(files, callback) {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'code-network-gen-'));
@@ -219,7 +219,36 @@ function testPackageSpecifierParsing() {
   assert.strictEqual(packageNameFromSpecifier('./local'), null);
 }
 
+function testIgnoredDirectoriesAreSkipped() {
+  withTempProject(
+    {
+      'src/main.js': 'function main() {}\n',
+      'vendor/lib.js': 'function vendored() {}\n',
+      '.claude/worktrees/agent-1/src/main.js': 'function main() {}\n',
+      '.output/server/index.mjs': 'function built() {}\n',
+    },
+    (tempDir) => {
+      const ids = (options) =>
+        analyzeDirectory(tempDir, options).nodes.map((node) => node.id);
+
+      // .claude and .output are skipped by default
+      assert.deepStrictEqual(ids().sort(), ['src/main.js:main', 'vendor/lib.js:vendored']);
+      assert.deepStrictEqual(ids({ ignoreDirs: ['vendor'] }), ['src/main.js:main']);
+    },
+  );
+
+  const program = createProgram().parse(
+    ['node', 'cli', '--path', '.', '--ignore', 'vendor, public,,data'],
+  );
+  assert.deepStrictEqual(program.opts().ignore, ['vendor', 'public', 'data']);
+  assert.deepStrictEqual(
+    createProgram().parse(['node', 'cli', '--path', '.']).opts().ignore,
+    [],
+  );
+}
+
 testForwardDeclarationsAndArrowFunctions();
+testIgnoredDirectoriesAreSkipped();
 testDependencyTracking();
 testStandaloneFunctionsRemainVisible();
 testMemberCallsDoNotCrossMatchByName();
