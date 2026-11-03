@@ -113,9 +113,12 @@ npx code-network-gen --path <directory> [-o output_name] [-f format]
 
 - `--path` - directory to analyze (required)
 - `-o` - output file prefix (optional, outputs to console if omitted)
-- `-f, --format` - output format: `csv` (default), `gexf` (for Gephi), `graphml` (for yEd, Cytoscape), `dot` (for Graphviz), or `mermaid` (for GitHub, Notion, etc.)
+- `-f, --format` - output format: `csv` (default), `json` (node-link, every field), `gexf` (for Gephi), `graphml` (for yEd, Cytoscape), `dot` (for Graphviz), or `mermaid` (for GitHub, Notion, etc.)
 - `--include-deps` - parse import/require statements to track actual dependency usage
-- `--ignore <dirs>` - comma-separated directory names to skip, on top of the defaults (`.claude`, `.git`, `.next`, `.nuxt`, `.output`, `.turbo`, `build`, `coverage`, `dist`, `node_modules`, `out`)
+- `--files` - add a node per file (`type: file`, labelled with its path), `defines` edges from each file to its functions, and file → file `imports` edges (static, dynamic, `require`, re-exports)
+- `--nuxt` - Nuxt conventions: auto-imported composables/utils resolve (top-level `composables/` and `utils/` for app code, `server/utils/` for server code), components used in templates become `renders` edges, and `'/api/...'` strings become `fetches` edges to the `server/api` route file
+- `--git-dates` - add `created` (YYYY-MM-DD) per node: a file's first commit, a function's first commit that added its name to that file
+- `--ignore <names>` - comma-separated directory or file names to skip, on top of the defaults (`.claude`, `.git`, `.next`, `.nuxt`, `.output`, `.turbo`, `build`, `coverage`, `dist`, `node_modules`, `out`)
 
 ### examples
 
@@ -308,6 +311,18 @@ the root stays intentionally boring: package files, config, source, tests, docs,
 1. walks directory tree
 2. parses javascript, typescript, and vue scripts into asts
 3. extracts function definitions and calls
-4. outputs network graph files for the selected format
+4. resolves each call like the language does (see below)
+5. outputs network graph files for the selected format
+
+### call resolution
+
+a bare call `foo()` links to, in order:
+
+1. a `foo` defined in the same file
+2. the `foo` it was imported from (`import { foo as bar }`, default imports, destructured `require`); a package import links nowhere
+3. nothing, if `foo` is a local variable or parameter (`const emit = defineEmits()` is not some other file's `emit`)
+4. otherwise (a global or auto-import) the one definition with that name, and only when there is exactly one; with `--nuxt`, only from the folders Nuxt auto-imports
+
+member calls (`obj.foo()`) only link within the same file. older versions linked every name to every definition with that name, which wired unrelated files together.
 
 that's it.
